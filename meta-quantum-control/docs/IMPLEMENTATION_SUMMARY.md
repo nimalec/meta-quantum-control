@@ -358,6 +358,3 @@ For questions about:
 - Experiments: `experiments/*.py` scripts
 - Debugging: Run `pytest tests/` first
 
----
-
-**Ready to prove optimality gaps and submit to ICML!** 🚀
