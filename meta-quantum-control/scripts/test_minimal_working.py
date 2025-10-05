@@ -292,7 +292,7 @@ def main():
         
     except Exception as e:
         print("\n" + "="*70)
-        print("❌ TEST FAILED ❌")
+        print("EST FAILED")
         print("="*70)
         print(f"\nError: {e}")
         import traceback
