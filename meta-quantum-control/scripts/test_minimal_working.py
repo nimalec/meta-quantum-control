@@ -87,22 +87,22 @@ def test_policy_integration(env):
         output_scale=0.5
     )
     
-    print(f"✓ Policy created: {policy.count_parameters()} params")
+    print(f"Policy created: {policy.count_parameters()} params")
     
     # Test forward pass
     task = NoiseParameters(alpha=1.0, A=0.1, omega_c=5.0)
     fidelity = env.evaluate_policy(policy, task)
-    print(f"✓ Policy evaluation: fidelity = {fidelity:.4f}")
+    print(f"Policy evaluation: fidelity = {fidelity:.4f}")
     
     # Test loss computation
     device = torch.device('cpu')
     loss = env.compute_loss(policy, task, device)
-    print(f"✓ Loss computation: loss = {loss.item():.4f}")
+    print(f"Loss computation: loss = {loss.item():.4f}")
     
     # Test gradient
     loss.backward()
     grad_norm = sum(p.grad.norm().item() for p in policy.parameters() if p.grad is not None)
-    print(f"✓ Gradients work: ||∇|| = {grad_norm:.4f}")
+    print(f"Gradients work: ||∇|| = {grad_norm:.4f}")
     
     return policy
 
@@ -159,8 +159,8 @@ def test_constants(env, policy):
     
     # Control-relevant variance
     var_result = compute_control_relevant_variance(env, tasks)
-    print(f"✓ σ²_S = {var_result['sigma_S_sq']:.8f}")
-    print(f"  σ²_out = {var_result['sigma_out_sq']:.8f}")
+    print(f" var_s = {var_result['sigma_S_sq']:.8f}")
+    print(f" var_out = {var_result['sigma_out_sq']:.8f}")
     print(f"  Ratio = {var_result['ratio_in_to_out']:.2f}")
     
     # Full constants (this is slow, use minimal samples)
@@ -172,7 +172,7 @@ def test_constants(env, policy):
         n_samples_mu=2
     )
     
-    print(f"\n✓ All constants estimated successfully")
+    print(f"\n All constants estimated successfully")
     
     return constants
 
@@ -196,7 +196,7 @@ def test_training_loop(env, policy):
         device=torch.device('cpu')
     )
     
-    print(f"✓ MAML created")
+    print(f"MAML created")
     
     # Task distribution
     task_dist = TaskDistribution(
@@ -235,7 +235,7 @@ def test_training_loop(env, policy):
         if iteration % 5 == 0:
             print(f"  Iter {iteration}: loss = {metrics['meta_loss']:.4f}")
     
-    print(f"✓ Training loop works")
+    print(f"Training loop works")
     
     # Test validation
     val_tasks = task_dist.sample(3, rng)
@@ -245,7 +245,7 @@ def test_training_loop(env, policy):
     ]
     val_metrics = maml.meta_validate(val_batch, loss_fn)
     
-    print(f"✓ Validation works")
+    print(f" Validation works")
     print(f"  Pre-adapt: {val_metrics['val_loss_pre_adapt']:.4f}")
     print(f"  Post-adapt: {val_metrics['val_loss_post_adapt']:.4f}")
     print(f"  Gain: {val_metrics['adaptation_gain']:.4f}")
@@ -277,14 +277,14 @@ def main():
         
         # Summary
         print("\n" + "="*70)
-        print("✓✓✓ ALL TESTS PASSED ✓✓✓")
+        print("ALL TESTS PASSED")
         print("="*70)
         print("\nYou can now run full experiments:")
         print("  python experiments/train_meta.py --config configs/experiment_config.yaml")
         print("\nEstimated constants summary:")
-        print(f"  Δ_min = {constants['Delta_min']:.6f}")
-        print(f"  C_filter = {constants['C_filter']:.6f}")
-        print(f"  μ_empirical = {constants['mu_empirical']:.6f}")
+        print(f"  del_min = {constants['Delta_min']:.6f}")
+        print(f"  c_filter = {constants['C_filter']:.6f}")
+        print(f"  mu_empirical = {constants['mu_empirical']:.6f}")
         print(f"  σ²_S = {constants['sigma_S_sq']:.8f}")
         print(f"  c_quantum = {constants['c_quantum']:.8f}")
         
