@@ -124,7 +124,7 @@ class PSDToLindblad:
         basis_operators: List[np.ndarray],
         sampling_freqs: np.ndarray,
         psd_model: NoisePSDModel
-    ):
+        ):
         """
         Args:
             basis_operators: Pauli operators [σx, σy, σz] or other basis
@@ -135,7 +135,7 @@ class PSDToLindblad:
         self.sampling_freqs = sampling_freqs
         self.psd_model = psd_model
     
- def Lindblad operators [L₁, L₂, ...]
+    def Lindblad(self): 
         """
         # Evaluate PSD at sampling frequencies
         S_values = self.psd_model.psd(self.sampling_freqs, theta)
@@ -143,6 +143,7 @@ class PSDToLindblad:
         # Map to dissipation rates (phenomenological)
         # Γ_j ∝ ∫ S(ω) |H_j(ω)|² dω where H_j is filter response
         # For simplicity: Γ_j = S(ω_j) at characteristic frequency
+        """ 
         
         L_ops = []
         for j, sigma in enumerate(self.basis_ops):
