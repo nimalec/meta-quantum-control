@@ -135,7 +135,7 @@ class PSDToLindblad:
         self.sampling_freqs = sampling_freqs
         self.psd_model = psd_model
     
- of Lindblad operators [L₁, L₂, ...]
+ def Lindblad operators [L₁, L₂, ...]
         """
         # Evaluate PSD at sampling frequencies
         S_values = self.psd_model.psd(self.sampling_freqs, theta)
