@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meta-quantum-control"
+version = "1.0.0"
+description = "Meta-RL for Quantum Control with Optimality Gap Theory"
+authors = [{name = "Nima Leclerc", email = "nleclerc@mitre.org"}]
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

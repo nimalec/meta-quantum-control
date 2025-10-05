@@ -1,0 +1,34 @@
+# Core dependencies
+numpy>=1.24.0
+scipy>=1.10.0
+torch>=2.0.0
+jax>=0.4.0
+jaxlib>=0.4.0
+
+# Quantum simulation
+qutip>=4.7.0
+
+# Meta-learning
+higher>=0.2.1  # For differentiable optimization in PyTorch
+
+# Optimization
+optax>=0.1.4  # JAX optimizers
+
+# Experiment management
+wandb>=0.15.0
+hydra-core>=1.3.0
+omegaconf>=2.3.0
+
+# Utilities
+tqdm>=4.65.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Testing
+pytest>=7.3.0
+pytest-cov>=4.1.0
+
+# Theory/numerics
+cvxpy>=1.3.0  # For robust optimization
+scikit-learn>=1.3.0  # For Rademacher complexity estimation
