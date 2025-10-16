@@ -136,6 +136,7 @@ class PSDToLindblad:
         self.psd_model = psd_model
     
     def Lindblad(self): 
+        ### THis is modified   to account for indentation error. 
         """
         # Evaluate PSD at sampling frequencies
         S_values = self.psd_model.psd(self.sampling_freqs, theta)
