@@ -38,7 +38,7 @@ class NoisePSDModel:
     - Double-exponential
     """
     
-    def __init__(self, model_type: str = '1/f'):
+    def __init__(self, model_type: str = 'one_over_f'):
         """
         Args:
             model_type: 'one_over_f', 'lorentzian', 'double_exp'
