@@ -29,7 +29,7 @@ See `docs/` directory for complete documentation.
 ```bibtex
 @inproceedings{leclerc2025meta,
   title={Meta-Reinforcement Learning for Quantum Control},
-  author={Leclerc, Nima},
+  author={Leclerc, Nima; Brawand, Nicholas},
   booktitle={ICML},
   year={2025}
 }
