@@ -135,17 +135,15 @@ class PSDToLindblad:
         self.sampling_freqs = sampling_freqs
         self.psd_model = psd_model
     
-    def Lindblad(self): 
-        ### THis is modified   to account for indentation error. 
+    def Lindblad(self, theta: NoiseParameters):
         """
-        # Evaluate PSD at sampling frequencies
-        S_values = self.psd_model.psd(self.sampling_freqs, theta)
-        
         # Map to dissipation rates (phenomenological)
         # Γ_j ∝ ∫ S(ω) |H_j(ω)|² dω where H_j is filter response
         # For simplicity: Γ_j = S(ω_j) at characteristic frequency
-        """ 
-        
+        """
+        # Evaluate PSD at sampling frequencies
+        S_values = self.psd_model.psd(self.sampling_freqs, theta)
+
         L_ops = []
         for j, sigma in enumerate(self.basis_ops):
             # Use PSD value at corresponding frequency

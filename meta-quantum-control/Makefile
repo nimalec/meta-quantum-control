@@ -42,10 +42,23 @@ results/figures/psd_comparison.png: .venv src/utils/plots.py src/quantum/noise_m
 results/figures/psd_comparison_alpha1.5.png: .venv src/utils/plots.py src/quantum/noise_models.py
 	uv run src/utils/plots.py psd-comparison $@ --alpha 1.5 --amplitude 0.2 --cutoff 10.0
 
+# ============================================================================
+# Effective Decay Rates Figures
+# ============================================================================
+
+# Default effective rates plot
+results/figures/effective_rates.png: .venv src/utils/plots.py src/quantum/noise_models.py
+	uv run src/utils/plots.py effective-rates $@ --n-tasks 5 --seed 42
+
+# Effective rates with more sampling frequencies
+results/figures/effective_rates_detailed.png: .venv src/utils/plots.py src/quantum/noise_models.py
+	uv run src/utils/plots.py effective-rates $@ --n-tasks 5 --n-freqs 20 --seed 42
+
 # Generate all standard figures
 all-figures: \
 	results/figures/one_over_f.png \
 	results/figures/psd_comparison.png \
 	results/figures/noise_lorentzian.png \
-	results/figures/noise_double_exp.png
+	results/figures/noise_double_exp.png \
+	results/figures/effective_rates.png
 

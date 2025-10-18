@@ -15,7 +15,8 @@ from src.quantum.noise_models import (
     NoisePSDModel,
     TaskDistribution,
     psd_distance,
-    NoiseParameters
+    NoiseParameters,
+    PSDToLindblad
 )
 
 # Initialize Typer app
@@ -236,6 +237,83 @@ def plot_psd_comparison(
     plt.close(fig)
 
 
+def plot_effective_rates(
+    output_path: Path,
+    n_tasks: int = 5,
+    seed: int = 42,
+    alpha_range: tuple = (0.5, 2.0),
+    A_range: tuple = (0.05, 0.3),
+    omega_c_range: tuple = (2.0, 8.0),
+    n_freqs: int = 10,
+    omega_min: float = 0.1,
+    omega_max: float = 100.0
+):
+    """
+    Plot effective decay rates for different noise tasks.
+
+    This plots the get_effective_rates() output from PSDToLindblad,
+    showing how different noise parameters affect dissipation rates
+    across frequency channels.
+
+    Args:
+        output_path: Where to save the figure
+        n_tasks: Number of tasks to sample and plot
+        seed: Random seed for reproducibility
+        alpha_range: Range for spectral exponent α
+        A_range: Range for amplitude A
+        omega_c_range: Range for cutoff frequency ωc
+        n_freqs: Number of sampling frequencies
+        omega_min: Minimum sampling frequency
+        omega_max: Maximum sampling frequency
+    """
+    configure_publication_style()
+
+    # Define task distribution
+    task_dist = TaskDistribution(
+        dist_type='uniform',
+        ranges={
+            'alpha': alpha_range,
+            'A': A_range,
+            'omega_c': omega_c_range
+        }
+    )
+
+    # Sample tasks
+    rng = np.random.default_rng(seed)
+    tasks = task_dist.sample(n_tasks, rng)
+
+    # Setup PSD model and sampling frequencies
+    psd_model = NoisePSDModel(model_type='one_over_f')
+    sampling_freqs = np.logspace(np.log10(omega_min), np.log10(omega_max), n_freqs)
+
+    # Create PSDToLindblad converter (basis_operators not needed for get_effective_rates)
+    psd_to_lindblad = PSDToLindblad(
+        basis_operators=[],  # Not used for get_effective_rates
+        sampling_freqs=sampling_freqs,
+        psd_model=psd_model
+    )
+
+    # Create figure
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    # Plot effective rates for each task
+    for i, task in enumerate(tasks):
+        rates = psd_to_lindblad.get_effective_rates(task)
+        label = f'Task {i}: α={task.alpha:.2f}, A={task.A:.2f}, ωc={task.omega_c:.1f}'
+        ax.loglog(sampling_freqs, rates, marker='o', label=label, linewidth=1.5, markersize=5)
+
+    # Formatting
+    ax.set_xlabel('Sampling Frequency ω (rad/s)')
+    ax.set_ylabel('Effective Decay Rate Γ(ω)')
+    ax.set_title('Effective Decay Rates from PSD (1/f model)')
+    ax.legend(loc='best', fontsize=8)
+    ax.grid(True, alpha=0.3, which='both')
+
+    # Save figure
+    save_figure(fig, output_path)
+    plt.close(fig)
+
+
 # ============================================================================
 # CLI Commands
 # ============================================================================
@@ -315,6 +393,42 @@ def psd_comparison(
         alpha=alpha,
         A=A,
         omega_c=omega_c
+    )
+
+
+@app.command()
+def effective_rates(
+    output: Path = typer.Argument(
+        ...,
+        help="Output file path (e.g., results/figures/effective_rates.png)"
+    ),
+    n_tasks: int = typer.Option(
+        5,
+        '--n-tasks', '-n',
+        help="Number of tasks to sample"
+    ),
+    seed: int = typer.Option(
+        42,
+        '--seed', '-s',
+        help="Random seed for reproducibility"
+    ),
+    n_freqs: int = typer.Option(
+        10,
+        '--n-freqs', '-f',
+        help="Number of sampling frequencies"
+    )
+):
+    """
+    Generate effective decay rates plot from PSD model.
+
+    Example:
+        uv run src/utils/plots.py effective-rates results/figures/effective_rates.png
+    """
+    plot_effective_rates(
+        output_path=output,
+        n_tasks=n_tasks,
+        seed=seed,
+        n_freqs=n_freqs
     )
 
 
