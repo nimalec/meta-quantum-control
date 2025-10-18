@@ -16,6 +16,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 
 The following command will create the figures for the paper and install the virtual environment if necessary:
 ```bash
+# Figures found under results/figures
 make all-figures
 ```
 
