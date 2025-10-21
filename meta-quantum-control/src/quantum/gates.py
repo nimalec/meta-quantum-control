@@ -10,8 +10,16 @@ Implements various fidelity measures:
 import numpy as np
 from scipy.linalg import sqrtm
 from typing import Tuple, Optional
-import jax.numpy as jnp
-from jax import jit
+
+# Optional JAX support
+try:
+    import jax.numpy as jnp
+    from jax import jit
+    JAX_AVAILABLE = True
+except ImportError:
+    JAX_AVAILABLE = False
+    jnp = None
+    jit = lambda f: f  # No-op decorator if JAX not available
 
 
 def state_fidelity(rho: np.ndarray, sigma: np.ndarray) -> float:
@@ -233,19 +241,27 @@ class TargetGates:
 
 
 # JAX versions for fast autodiff
-@jit
-def state_fidelity_jax(rho: jnp.ndarray, sigma: jnp.ndarray) -> float:
-    """JAX implementation of state fidelity."""
-    # Simplified for pure states or use iterative sqrtm
-    # For now, assume pure states: F = |tr(ρσ)|
-    return jnp.abs(jnp.trace(rho @ sigma)) ** 2
+if JAX_AVAILABLE:
+    @jit
+    def state_fidelity_jax(rho, sigma) -> float:
+        """JAX implementation of state fidelity."""
+        # Simplified for pure states or use iterative sqrtm
+        # For now, assume pure states: F = |tr(ρσ)|
+        return jnp.abs(jnp.trace(rho @ sigma)) ** 2
 
+    @jit
+    def gate_infidelity_jax(rho_final, rho_target) -> float:
+        """JAX gate infidelity for gradient computation."""
+        fidelity = state_fidelity_jax(rho_final, rho_target)
+        return 1.0 - fidelity
+else:
+    def state_fidelity_jax(rho, sigma) -> float:
+        """JAX implementation not available. Use numpy version."""
+        raise ImportError("JAX is not installed. Install with: pip install jax jaxlib")
 
-@jit
-def gate_infidelity_jax(rho_final: jnp.ndarray, rho_target: jnp.ndarray) -> float:
-    """JAX gate infidelity for gradient computation."""
-    fidelity = state_fidelity_jax(rho_final, rho_target)
-    return 1.0 - fidelity
+    def gate_infidelity_jax(rho_final, rho_target) -> float:
+        """JAX implementation not available. Use numpy version."""
+        raise ImportError("JAX is not installed. Install with: pip install jax jaxlib")
 
 
 # Example usage

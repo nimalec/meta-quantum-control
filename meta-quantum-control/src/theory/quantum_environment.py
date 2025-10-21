@@ -192,14 +192,25 @@ class QuantumEnvironment:
     ) -> torch.Tensor:
         """
         Compute loss (infidelity) with gradient support.
-        
+
+        WARNING: This implementation is NOT fully differentiable because the quantum
+        simulation happens in numpy. For proper gradient flow through the quantum
+        dynamics, you need:
+        1. JAX-based differentiable quantum simulator, OR
+        2. PyTorch-based quantum simulator, OR
+        3. Analytical gradients via adjoint method
+
+        Current behavior: Gradients flow through the policy network but NOT through
+        the quantum simulation. This works for zeroth-order optimization and
+        finite-difference based MAML, but not for full second-order MAML.
+
         Args:
             policy: Policy network
             task_params: Task parameters
             device: torch device
-            
+
         Returns:
-            loss: Differentiable loss tensor
+            loss: Loss tensor (gradients only partial)
         """
         # Task features
         task_features = torch.tensor(
@@ -207,22 +218,26 @@ class QuantumEnvironment:
             dtype=torch.float32,
             device=device
         )
-        
+
         # Generate controls
         controls = policy(task_features)
+
+        # NOTE: detach() breaks gradient flow through quantum simulation
+        # For full differentiability, need JAX or PyTorch quantum simulator
         controls_np = controls.detach().cpu().numpy()
-        
-        # Evaluate fidelity
+
+        # Evaluate fidelity (non-differentiable step)
         fidelity = self.evaluate_controls(controls_np, task_params)
-        
-        # Create differentiable loss
+
+        # Create loss tensor
+        # Setting requires_grad=False is honest about gradient limitations
         loss = torch.tensor(
             1.0 - fidelity,
             dtype=torch.float32,
             device=device,
-            requires_grad=False  # Fidelity itself not differentiable, but controls are
+            requires_grad=False
         )
-        
+
         return loss
     
     def clear_cache(self):

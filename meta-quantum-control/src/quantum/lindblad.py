@@ -9,8 +9,17 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.linalg import expm
 from typing import List, Tuple, Callable, Optional
-import jax.numpy as jnp
-from jax import jit, vmap
+
+# Optional JAX support
+try:
+    import jax.numpy as jnp
+    from jax import jit, vmap
+    JAX_AVAILABLE = True
+except ImportError:
+    JAX_AVAILABLE = False
+    jnp = None
+    jit = lambda f: f  # No-op decorator if JAX not available
+    vmap = None
 
 
 class LindbladSimulator:
@@ -206,22 +215,26 @@ class LindbladSimulator:
 
 class LindbladJAX:
     """JAX implementation for fast batched simulations and autodiff."""
-    
+
     def __init__(
         self,
-        H0: jnp.ndarray,
-        H_controls: List[jnp.ndarray],
+        H0,
+        H_controls: List,
         n_segments: int,
         T: float
     ):
-        self.H0 = H0
-        self.H_controls = H_controls
+        if not JAX_AVAILABLE:
+            raise ImportError("JAX is required for LindbladJAX but is not installed. "
+                            "Install with: pip install jax jaxlib")
+
+        self.H0 = jnp.asarray(H0) if jnp is not None else H0
+        self.H_controls = [jnp.asarray(H) if jnp is not None else H for H in H_controls]
         self.n_segments = n_segments
         self.dt = T / n_segments
         self.d = H0.shape[0]
-        
+
     @jit
-    def evolve_step(self, rho: jnp.ndarray, u: jnp.ndarray, L_ops: List[jnp.ndarray]) -> jnp.ndarray:
+    def evolve_step(self, rho, u, L_ops: List):
         """Single time step evolution with controls u and Lindblad operators L_ops."""
         # Hamiltonian part
         H_total = self.H0
@@ -244,10 +257,10 @@ class LindbladJAX:
     
     def evolve_trajectory(
         self,
-        rho0: jnp.ndarray,
-        control_sequence: jnp.ndarray,
-        L_ops: List[jnp.ndarray]
-    ) -> jnp.ndarray:
+        rho0,
+        control_sequence,
+        L_ops: List
+    ):
         """Full trajectory evolution."""
         rho = rho0
         for u in control_sequence:

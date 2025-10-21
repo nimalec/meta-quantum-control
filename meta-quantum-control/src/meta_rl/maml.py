@@ -11,7 +11,14 @@ from torch import autograd
 import numpy as np
 from typing import List, Tuple, Dict, Callable, Optional
 from copy import deepcopy
-import higher  # For differentiable optimization
+
+# Optional higher library for second-order MAML
+try:
+    import higher  # For differentiable optimization
+    HIGHER_AVAILABLE = True
+except ImportError:
+    HIGHER_AVAILABLE = False
+    higher = None
 
 
 class MAML:
@@ -107,38 +114,42 @@ class MAML:
         task_data: Dict,
         loss_fn: Callable,
         num_steps: Optional[int] = None
-    ) -> Tuple[higher.patch._MonkeyPatchBase, List[float]]:
+    ) -> Tuple:
         """
         Inner loop using `higher` library for differentiable optimization.
         This enables second-order MAML (backprop through inner loop).
-        
+
         Returns:
             fmodel: Functional model after adaptation
             losses: Inner loop losses
         """
+        if not HIGHER_AVAILABLE:
+            raise ImportError("The 'higher' library is required for second-order MAML. "
+                            "Install with: pip install higher")
+
         num_steps = num_steps or self.inner_steps
-        
+
         support_data = task_data['support']
         losses = []
-        
+
         # Create differentiable optimizer context
         inner_opt = optim.SGD(self.policy.parameters(), lr=self.inner_lr)
-        
+
         with higher.innerloop_ctx(
             self.policy,
             inner_opt,
             copy_initial_weights=True,
             track_higher_grads=(not self.first_order)
         ) as (fmodel, diffopt):
-            
+
             for step in range(num_steps):
                 # Forward pass with functional model
                 loss = loss_fn(fmodel, support_data)
                 losses.append(loss.item())
-                
+
                 # Differentiable gradient step
                 diffopt.step(loss)
-            
+
             return fmodel, losses
     
     def meta_train_step(
@@ -165,16 +176,20 @@ class MAML:
         
         for task_data in task_batch:
             if use_higher and not self.first_order:
-                # Second-order MAML
-                fmodel, inner_losses = self.inner_loop_higher(task_data, loss_fn)
-                
-                # Evaluate on query set
-                query_loss = loss_fn(fmodel, task_data['query'])
-                
+                # Second-order MAML (requires higher library)
+                if not HIGHER_AVAILABLE:
+                    # Fall back to first-order if higher not available
+                    adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
+                    query_loss = loss_fn(adapted_policy, task_data['query'])
+                else:
+                    fmodel, inner_losses = self.inner_loop_higher(task_data, loss_fn)
+                    # Evaluate on query set
+                    query_loss = loss_fn(fmodel, task_data['query'])
+
             else:
                 # First-order MAML or manual implementation
                 adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
-                
+
                 # Evaluate on query set
                 query_loss = loss_fn(adapted_policy, task_data['query'])
             

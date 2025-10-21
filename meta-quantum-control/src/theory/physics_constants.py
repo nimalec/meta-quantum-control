@@ -271,13 +271,21 @@ def estimate_PL_constant_from_convergence(
     
     except RuntimeError as e:
         print(f"Curve fitting failed: {e}")
-        # Fallback: estimate from first and last
+        # Fallback: estimate from first and last losses
         if len(losses) > 1 and losses[0] > losses[-1]:
-            rate_approx = -np.log((losses[-1] - losses[-1]) / (losses[0] - losses[-1] + 1e-10)) / K_values[-1]
-            mu_approx = rate_approx / eta
+            # Assume exponential decay: loss(K) ≈ L_star + (L_0 - L_star) * exp(-rate * K)
+            # Using first and last points
+            L_min = min(losses)
+            delta_loss = losses[0] - losses[-1]
+            if delta_loss > 1e-10:
+                # Rate from exponential fit between two points
+                rate_approx = np.log((losses[0] - L_min + 1e-10) / (losses[-1] - L_min + 1e-10)) / K_values[-1]
+                mu_approx = max(rate_approx / eta, 0.001)  # Ensure positive
+            else:
+                mu_approx = 0.01  # Default fallback
         else:
             mu_approx = 0.01  # Default fallback
-        
+
         return {
             'mu': mu_approx,
             'rate': mu_approx * eta,

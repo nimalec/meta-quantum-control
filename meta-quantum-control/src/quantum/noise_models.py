@@ -70,27 +70,34 @@ class NoisePSDModel:
         1/f^α noise with cutoff:
         S(ω) = A / (|ω|^α + ωc^α)
         """
-        return theta.A / (np.abs(omega)**theta.alpha + theta.omega_c**theta.alpha)
+        # Add small epsilon to prevent division by zero when omega=0 and omega_c=0
+        epsilon = 1e-12
+        omega_term = np.abs(omega)**theta.alpha if theta.alpha > 0 else np.ones_like(omega)
+        cutoff_term = theta.omega_c**theta.alpha if theta.alpha > 0 else 1.0
+        return theta.A / (omega_term + cutoff_term + epsilon)
     
     def _lorentzian_psd(self, omega: np.ndarray, theta: NoiseParameters) -> np.ndarray:
         """
         Lorentzian (Ornstein-Uhlenbeck):
         S(ω) = A / (ω² + ωc²)
         """
-        return theta.A / (omega**2 + theta.omega_c**2)
+        # Add small epsilon to prevent numerical issues
+        epsilon = 1e-12
+        return theta.A / (omega**2 + theta.omega_c**2 + epsilon)
     
     def _double_exp_psd(self, omega: np.ndarray, theta: NoiseParameters) -> np.ndarray:
         """
         Sum of two Lorentzians (multi-scale noise):
         S(ω) = A₁/(ω² + ωc₁²) + A₂/(ω² + ωc₂²)
-        
+
         Here we use α to interpolate between scales.
         """
+        epsilon = 1e-12
         omega_c1 = theta.omega_c
         omega_c2 = theta.omega_c * (1 + theta.alpha)
         A1 = theta.A * (1 - theta.alpha / 5)
         A2 = theta.A * (theta.alpha / 5)
-        return A1 / (omega**2 + omega_c1**2) + A2 / (omega**2 + omega_c2**2)
+        return A1 / (omega**2 + omega_c1**2 + epsilon) + A2 / (omega**2 + omega_c2**2 + epsilon)
     
     def correlation_function(self, tau: np.ndarray, theta: NoiseParameters) -> np.ndarray:
         """
@@ -135,11 +142,19 @@ class PSDToLindblad:
         self.sampling_freqs = sampling_freqs
         self.psd_model = psd_model
     
-    def Lindblad(self, theta: NoiseParameters):
+    def get_lindblad_operators(self, theta: NoiseParameters):
         """
-        # Map to dissipation rates (phenomenological)
-        # Γ_j ∝ ∫ S(ω) |H_j(ω)|² dω where H_j is filter response
-        # For simplicity: Γ_j = S(ω_j) at characteristic frequency
+        Get Lindblad operators for given task parameters.
+
+        Map to dissipation rates (phenomenological):
+        Γ_j ∝ ∫ S(ω) |H_j(ω)|² dω where H_j is filter response
+        For simplicity: Γ_j = S(ω_j) at characteristic frequency
+
+        Args:
+            theta: NoiseParameters with (alpha, A, omega_c)
+
+        Returns:
+            L_ops: List of Lindblad operators [L_1, L_2, ...]
         """
         # Evaluate PSD at sampling frequencies
         S_values = self.psd_model.psd(self.sampling_freqs, theta)
@@ -149,10 +164,10 @@ class PSDToLindblad:
             # Use PSD value at corresponding frequency
             freq_idx = min(j, len(self.sampling_freqs) - 1)
             gamma_j = S_values[freq_idx]
-            
+
             # Lindblad operator: L_j = sqrt(Γ_j) * σ_j
             L_ops.append(np.sqrt(gamma_j) * sigma)
-        
+
         return L_ops
     
     def get_effective_rates(self, theta: NoiseParameters) -> np.ndarray:
