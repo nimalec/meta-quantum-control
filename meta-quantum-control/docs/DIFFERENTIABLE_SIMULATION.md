@@ -4,15 +4,6 @@
 
 This document explains the **critical differentiable simulation capability** that enables proper gradient flow through quantum dynamics for meta-learning.
 
-## The Problem
-
-The original implementation used NumPy/SciPy for quantum simulation, which **breaks gradient flow**:
-
-
-## The Solution
-
-We implemented a **PyTorch-native differentiable Lindblad simulator** (`src/quantum/lindblad_torch.py`) that maintains gradient flow through the entire quantum dynamics.
-
 ### Architecture
 
 ```python
