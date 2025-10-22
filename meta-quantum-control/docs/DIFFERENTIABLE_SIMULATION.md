@@ -4,36 +4,6 @@
 
 This document explains the **critical differentiable simulation capability** that enables proper gradient flow through quantum dynamics for meta-learning.
 
-## The Problem
-
-The original implementation used NumPy/SciPy for quantum simulation, which **breaks gradient flow**:
-
-```python
-# OLD (NON-DIFFERENTIABLE)
-def compute_loss(self, policy, task_params):
-    controls = policy(task_features)
-    controls_np = controls.detach().cpu().numpy()  # ❌ Breaks gradients!
-
-    # NumPy simulation - no gradients
-    fidelity = self.evaluate_controls(controls_np, task_params)
-
-    # Loss has no gradient connection to policy
-    loss = torch.tensor(1.0 - fidelity, requires_grad=False)
-    return loss
-```
-
-**Why this is critical**: Meta-learning (MAML) requires gradients to flow through:
-1. Policy network parameters
-2. Quantum simulation dynamics
-3. Fidelity computation
-4. Back through adaptation steps
-
-Without gradient flow through the quantum simulation, **second-order MAML cannot work properly**.
-
-## The Solution
-
-We implemented a **PyTorch-native differentiable Lindblad simulator** (`src/quantum/lindblad_torch.py`) that maintains gradient flow through the entire quantum dynamics.
-
 ### Architecture
 
 ```python
