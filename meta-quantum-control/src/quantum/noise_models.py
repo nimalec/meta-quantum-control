@@ -15,7 +15,8 @@ from dataclasses import dataclass
 
 @dataclass
 class NoiseParameters:
-    """Task parameters defining a noise environment."""
+    """Good. 
+    Task parameters defining a noise environment."""
     alpha: float  # Spectral exponent (1/f^α noise)
     A: float      # Amplitude/strength
     omega_c: float  # Cutoff frequency
@@ -29,7 +30,7 @@ class NoiseParameters:
 
 
 class NoisePSDModel:
-    """
+    """Good. 
     Power spectral density models for colored noise.
     
     Models available:
@@ -46,7 +47,7 @@ class NoisePSDModel:
         self.model_type = model_type
     
     def psd(self, omega: np.ndarray, theta: NoiseParameters) -> np.ndarray:
-        """
+        """Good. 
         Compute S(ω; θ).
         
         Args:
@@ -66,7 +67,7 @@ class NoisePSDModel:
             raise ValueError(f"Unknown model type: {self.model_type}")
     
     def _one_over_f_psd(self, omega: np.ndarray, theta: NoiseParameters) -> np.ndarray:
-        """
+        """Good. 
         1/f^α noise with cutoff:
         S(ω) = A / (|ω|^α + ωc^α)
         """
@@ -77,7 +78,7 @@ class NoisePSDModel:
         return theta.A / (omega_term + cutoff_term + epsilon)
     
     def _lorentzian_psd(self, omega: np.ndarray, theta: NoiseParameters) -> np.ndarray:
-        """
+        """Good. 
         Lorentzian (Ornstein-Uhlenbeck):
         S(ω) = A / (ω² + ωc²)
         """
@@ -86,7 +87,7 @@ class NoisePSDModel:
         return theta.A / (omega**2 + theta.omega_c**2 + epsilon)
     
     def _double_exp_psd(self, omega: np.ndarray, theta: NoiseParameters) -> np.ndarray:
-        """
+        """Good. 
         Sum of two Lorentzians (multi-scale noise):
         S(ω) = A₁/(ω² + ωc₁²) + A₂/(ω² + ωc₂²)
 
@@ -100,7 +101,7 @@ class NoisePSDModel:
         return A1 / (omega**2 + omega_c1**2 + epsilon) + A2 / (omega**2 + omega_c2**2 + epsilon)
     
     def correlation_function(self, tau: np.ndarray, theta: NoiseParameters) -> np.ndarray:
-        """
+        """Good. 
         Compute correlation function C(τ) = ∫ S(ω) e^{iωτ} dω via inverse Fourier.
         
         For Lorentzian: C(τ) = (A/2ωc) exp(-ωc|τ|)
@@ -117,7 +118,7 @@ class NoisePSDModel:
 
 
 class PSDToLindblad:
-    """
+    """Good. 
     Convert PSD parameters to Lindblad operators.
     
     Approaches:
@@ -143,7 +144,7 @@ class PSDToLindblad:
         self.psd_model = psd_model
     
     def get_lindblad_operators(self, theta: NoiseParameters):
-        """
+        """Good. 
         Get Lindblad operators for given task parameters.
 
         Map to dissipation rates (phenomenological):
@@ -177,7 +178,7 @@ class PSDToLindblad:
 
 
 class TaskDistribution:
-    """
+    """good. 
     Distribution P over task parameters Θ.
     
     Supports:
@@ -210,7 +211,7 @@ class TaskDistribution:
         self.cov = cov
     
     def sample(self, n_tasks: int, rng: np.random.Generator = None) -> List[NoiseParameters]:
-        """
+        """Good. 
         Sample n tasks from P.
         
         Returns:
@@ -243,7 +244,8 @@ class TaskDistribution:
         return tasks
     
     def compute_variance(self) -> float:
-        """Compute σ²_θ for theoretical bounds."""
+        """Good. 
+        Compute σ²_θ for theoretical bounds."""
         if self.dist_type == 'uniform':
             # Variance of uniform: (b-a)²/12 for each dimension
             var_alpha = ((self.ranges['alpha'][1] - self.ranges['alpha'][0])**2) / 12
@@ -257,7 +259,7 @@ class TaskDistribution:
 
 
 def psd_distance(theta1: NoiseParameters, theta2: NoiseParameters, omega_grid: np.ndarray) -> float:
-    """
+    """Good. 
     Compute distance d_Θ(θ, θ') = sup_ω |S(ω; θ) - S(ω; θ')|.
     
     Args:
