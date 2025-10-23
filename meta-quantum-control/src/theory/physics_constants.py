@@ -16,7 +16,8 @@ from tqdm import tqdm
 
 
 def compute_spectral_gap(env, task_params) -> float:
-    """
+    """ 
+    Good. 
     Compute Lindblad spectral gap Δ(θ).
     
     Δ = gap between eigenvalue 0 and next eigenvalue of L_θ.
@@ -40,9 +41,11 @@ def compute_spectral_gap(env, task_params) -> float:
     
     # Hamiltonian part: -i[H, ρ]
     # vec(-i[H,ρ]) = -i(I⊗H - H^T⊗I)vec(ρ)
+    # Constructs Lindblad superoperator 
     L_super += -1j * (np.kron(I, H0) - np.kron(H0.T, I))
     
     # Dissipation part: Σⱼ(Lⱼρ L†ⱼ - ½{L†ⱼLⱼ, ρ})
+    ##Construct total superoperator 
     for L in L_ops:
         # Lⱼ ρ L†ⱼ → (L̄ⱼ ⊗ Lⱼ) vec(ρ)
         L_super += np.kron(L.conj(), L)
@@ -72,6 +75,7 @@ def compute_spectral_gap(env, task_params) -> float:
 
 def estimate_spectral_gap_distribution(env, tasks: List) -> Dict:
     """
+    Good. 
     Estimate spectral gap statistics over task distribution.
     
     Args:
@@ -100,7 +104,7 @@ def estimate_spectral_gap_distribution(env, tasks: List) -> Dict:
 
 
 def compute_control_response_operator(env, omega_samples: np.ndarray = None) -> np.ndarray:
-    """
+    """ Might be worth checking. 
     Compute control response operator M(ω).
     
     M(ω) ≈ G(ω)^{-1} N(ω) where:
@@ -155,7 +159,7 @@ def compute_control_response_operator(env, omega_samples: np.ndarray = None) -> 
 
 
 def estimate_filter_constant(env) -> float:
-    """
+    """ Worth checking again. 
     Estimate filter separation constant C_filter.
     
     C_filter = σ²_min(M) / (2π)
@@ -185,7 +189,7 @@ def estimate_PL_constant_from_convergence(
     eta: float = 0.01,
     device: torch.device = torch.device('cpu')
 ) -> Dict:
-    """
+    """ Good. 
     Estimate μ (PL constant) by measuring convergence rate empirically.
     
     Fits exponential: L(K) = L* + (L₀ - L*) exp(-μηK)
@@ -204,32 +208,40 @@ def estimate_PL_constant_from_convergence(
     from copy import deepcopy
     
     losses = []
-    
+
     print(f"Estimating μ for task (α={task_params.alpha:.2f}, A={task_params.A:.3f})...")
     
+    ##Iterates over set of adaptation steps 
     for K in tqdm(K_values):
         # Clone policy
+        ## Existing policy 
         adapted_policy = deepcopy(policy)
-        adapted_policy.train()
+        adapted_policy.train() #Train policy 
         
+        #Optimzer --> define SGD optimzer with learning rate 
         optimizer = torch.optim.SGD(adapted_policy.parameters(), lr=eta)
         
-        # K gradient steps
+        # K gradient steps 
         for _ in range(K):
+            ##Zero gradient initialization 
             optimizer.zero_grad()
+            #Define loss function 
             loss = env.compute_loss(adapted_policy, task_params, device)
+            #Perform a backward step 
             loss.backward()
             optimizer.step()
         
         # Final loss
         with torch.no_grad():
+            #Recover final loss value 
             final_loss = env.compute_loss(adapted_policy, task_params, device).item()
-        
+        #Add loss function to list 
         losses.append(final_loss)
-    
+    #Concvert loss to array 
     losses = np.array(losses)
     
     # Fit exponential: L(K) = L_star + (L_0 - L_star) * exp(-rate * K)
+    #Fitting procedure 
     def exp_decay(K, L_star, L_0, rate):
         return L_star + (L_0 - L_star) * np.exp(-rate * K)
     
@@ -238,7 +250,7 @@ def estimate_PL_constant_from_convergence(
         L_star_init = losses[-1]  # Assume converges
         L_0_init = losses[0]
         rate_init = 0.1
-        
+        #Fit curve 
         popt, pcov = curve_fit(
             exp_decay,
             K_values,
@@ -246,15 +258,17 @@ def estimate_PL_constant_from_convergence(
             p0=[L_star_init, L_0_init, rate_init],
             maxfev=10000
         )
-        
+        ##Fit parameters 
         L_star_fit, L_0_fit, rate_fit = popt
         
         # μ = rate / η
+        #Empirical mu , comparing learning rate to fitted rate 
         mu_empirical = rate_fit / eta
         
         # Quality metrics
+        ## Compare loss functions 
         residuals = losses - exp_decay(np.array(K_values), *popt)
-        ss_res = np.sum(residuals**2)
+        ss_res = np.sum(residuals**2) 
         ss_tot = np.sum((losses - np.mean(losses))**2)
         r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
         
@@ -268,7 +282,7 @@ def estimate_PL_constant_from_convergence(
             'K_values': K_values,
             'fit_params': popt
         }
-    
+    ##Run time erorr 
     except RuntimeError as e:
         print(f"Curve fitting failed: {e}")
         # Fallback: estimate from first and last losses
@@ -301,7 +315,7 @@ def compute_control_relevant_variance(
     tasks: List,
     omega_control_band: tuple = None
 ) -> Dict:
-    """
+    """ Worth checking, but looks good. 
     Compute control-relevant variance σ²_S.
     
     σ²_S = Var[∫_{Ω_control} S(ω; θ) χ(ω) dω]
@@ -375,7 +389,7 @@ def estimate_all_constants(
     n_samples_gap: int = 10,
     n_samples_mu: int = 3
 ) -> Dict:
-    """
+    """ Good. 
     Estimate all theoretical constants.
     
     Args:
