@@ -75,7 +75,7 @@ class QuantumEnvironment:
         )
     
     def get_lindblad_operators(self, task_params: NoiseParameters) -> list:
-        """
+        """ Good.  
         Get Lindblad operators for task with caching.
         
         Args:
@@ -93,7 +93,7 @@ class QuantumEnvironment:
         return self._L_cache[key]
     
     def get_simulator(self, task_params: NoiseParameters) -> LindbladSimulator:
-        """
+        """ Good. 
         Get simulator for task with caching.
         
         Args:
@@ -124,7 +124,7 @@ class QuantumEnvironment:
         task_params: NoiseParameters,
         return_trajectory: bool = False
     ) -> float:
-        """
+        """ Good. 
         Simulate and compute fidelity.
         
         Args:
@@ -155,7 +155,7 @@ class QuantumEnvironment:
         task_params: NoiseParameters,
         device: torch.device = torch.device('cpu')
     ) -> float:
-        """
+        """ Good. 
         Evaluate policy on task.
         
         Args:
@@ -191,7 +191,7 @@ class QuantumEnvironment:
         task_params: NoiseParameters,
         device: torch.device = torch.device('cpu')
     ) -> torch.Tensor:
-        """
+        """ Take a look ==> which function is replacing it. 
         Compute loss (infidelity) with gradient support.
 
         WARNING: This implementation is NOT fully differentiable because the quantum
@@ -248,7 +248,7 @@ class QuantumEnvironment:
         device: torch.device = torch.device('cpu'),
         use_rk4: bool = True
     ) -> torch.Tensor:
-        """
+        """ Good: OK... this is the differentiable version that propogates gradients. 
         Compute loss (infidelity) with FULL gradient support through quantum simulation.
 
         This is the NEW differentiable version that allows gradients to flow through
@@ -314,7 +314,7 @@ class QuantumEnvironment:
         rho: torch.Tensor,
         sigma: torch.Tensor
     ) -> torch.Tensor:
-        """
+        """ Good ---> differential form of fidelity . can be implemented with autodiff. 
         Compute quantum state fidelity in PyTorch (differentiable).
 
         F(ρ, σ) = tr(√(√ρ σ √ρ))²
@@ -365,6 +365,7 @@ class BatchedQuantumEnvironment(QuantumEnvironment):
     """
     
     def __init__(self, *args, use_jax: bool = True, **kwargs):
+        ## This uses Jax 
         super().__init__(*args, **kwargs)
         self.use_jax = use_jax
         
