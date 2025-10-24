@@ -24,6 +24,7 @@ from src.theory.physics_constants import (
 
 
 def test_environment():
+    ## Test enviroment 
     """Test 1: Environment creation and evaluation."""
     print("\n" + "="*60)
     print("TEST 1: Environment Creation")
@@ -38,11 +39,13 @@ def test_environment():
     }
     
     # Target
+    #Target unitary 
     U_target = TargetGates.hadamard()
     ket_0 = np.array([1, 0], dtype=complex)
     target_state = np.outer(U_target @ ket_0, (U_target @ ket_0).conj())
     
     # Create environment
+    #Check enviroment. 
     env = create_quantum_environment(config, target_state)
     
     print(f"✓ Environment created")
@@ -51,9 +54,11 @@ def test_environment():
     print(f"  Horizon: {env.T}")
     
     # Test task
+    #Test noise 
     task = NoiseParameters(alpha=1.0, A=0.1, omega_c=5.0)
     
     # Test Lindblad operators
+    #Check this 
     L_ops = env.get_lindblad_operators(task)
     print(f"✓ Lindblad operators: {len(L_ops)} operators")
     for i, L in enumerate(L_ops):
@@ -112,7 +117,7 @@ def test_spectral_gap(env):
     print("\n" + "="*60)
     print("TEST 3: Spectral Gap")
     print("="*60)
-    
+    ##Check this ... --> make a distribution 
     task = NoiseParameters(alpha=1.0, A=0.1, omega_c=5.0)
     
     gap = compute_spectral_gap(env, task)
@@ -138,7 +143,7 @@ def test_constants(env, policy):
     print("TEST 4: Constants Estimation")
     print("="*60)
     
-    # Create task distribution
+    # Create task distribution --> create a task distribution 
     task_dist = TaskDistribution(
         dist_type='uniform',
         ranges={
@@ -148,16 +153,17 @@ def test_constants(env, policy):
         }
     )
     
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng(42) # range of random numbers 
     tasks = task_dist.sample(5, rng)  # Small sample for speed
     
     print("Testing individual constants...")
     
-    # Filter constant
+    # Filter constant --> C_filter 
     C_filter = estimate_filter_constant(env)
     print(f"✓ C_filter = {C_filter:.6f}")
     
     # Control-relevant variance
+    ## control relevant task variance 
     var_result = compute_control_relevant_variance(env, tasks)
     print(f" var_s = {var_result['sigma_S_sq']:.8f}")
     print(f" var_out = {var_result['sigma_out_sq']:.8f}")
