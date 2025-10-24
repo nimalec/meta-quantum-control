@@ -78,7 +78,7 @@ class MAML:
         loss_fn: Callable,
         num_steps: Optional[int] = None
     ) -> Tuple[nn.Module, List[float]]:
-        """
+        """ Good 
         Perform K-step inner loop adaptation on a single task.
         
         Args:
@@ -104,12 +104,14 @@ class MAML:
         
         losses = []
         support_data = task_data['support']
-        
+        #Perform K steps 
         for step in range(num_steps):
+            #Clear gradients 
             inner_optimizer.zero_grad()
             
             # Compute loss on support set
             loss = loss_fn(adapted_policy, support_data)
+            ##use this for plotting 
             losses.append(loss.item())
             
             # Gradient step
@@ -124,7 +126,7 @@ class MAML:
         loss_fn: Callable,
         num_steps: Optional[int] = None
     ) -> Tuple:
-        """
+        """ Good 
         Inner loop using `higher` library for differentiable optimization.
         This enables second-order MAML (backprop through inner loop).
 
@@ -167,7 +169,7 @@ class MAML:
         loss_fn: Callable,
         use_higher: bool = True
     ) -> Dict[str, float]:
-        """
+        """ Good 
         Single meta-training step on a batch of tasks.
         
         Args:
@@ -178,6 +180,7 @@ class MAML:
         Returns:
             metrics: Dictionary of training metrics
         """
+        #clears meta grad 
         self.meta_optimizer.zero_grad()
         
         meta_loss = 0.0
@@ -188,7 +191,7 @@ class MAML:
                 # Second-order MAML (requires higher library)
                 if not HIGHER_AVAILABLE:
                     # Fall back to first-order if higher not available
-                    adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
+                    adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn) ## iner loop adaptation 
                     query_loss = loss_fn(adapted_policy, task_data['query'])
                 else:
                     fmodel, inner_losses = self.inner_loop_higher(task_data, loss_fn)
@@ -196,7 +199,7 @@ class MAML:
                     query_loss = loss_fn(fmodel, task_data['query'])
 
             else:
-                # First-order MAML or manual implementation
+                # First-order MAML or manual implementation  --> first order optimization 
                 adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
 
                 # Evaluate on query set
@@ -205,7 +208,7 @@ class MAML:
             meta_loss += query_loss
             task_losses.append(query_loss.item())
         
-        # Average over tasks
+        # Average over tasks  --> normalize 
         meta_loss = meta_loss / len(task_batch)
         
         # Meta-gradient step
@@ -276,6 +279,7 @@ class MAML:
         return metrics
     
     def save_checkpoint(self, path: str, epoch: int, **kwargs):
+        ## Saves meta learned states
         """Save meta-learned initialization and training state."""
         checkpoint = {
             'epoch': epoch,
@@ -291,6 +295,7 @@ class MAML:
         print(f"Checkpoint saved to {path}")
     
     def load_checkpoint(self, path: str) -> int:
+        ##Load a check point ofr an epoch 
         """Load meta-learned initialization and training state."""
         checkpoint = torch.load(path, map_location=self.device)
         
@@ -308,6 +313,7 @@ class MAML:
 
 
 class MAMLTrainer:
+    ## Higher level training 
     """
     High-level trainer for MAML experiments.
     Handles task sampling, data generation, and training loop.
