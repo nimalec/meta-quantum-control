@@ -25,20 +25,21 @@ from src.meta_rl.maml import MAML, MAMLTrainer
 
 
 def create_quantum_system(config: dict):
+    ## create a 1 qubit simulator ==> 
     """Create quantum system simulator."""
     # Pauli matrices for 1-qubit
     sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
     sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
     sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
     
-    # System Hamiltonians
+    # System Hamiltonians ==> initialize Hamiltonian 
     H0 = 0.0 * sigma_z  # Drift (can be non-zero)
     H_controls = [sigma_x, sigma_y]  # Control Hamiltonians
     
-    # PSD model
+    # PSD model ==> define a PSD noise model 
     psd_model = NoisePSDModel(model_type=config.get('psd_model', 'one_over_f'))
     
-    # Sampling frequencies
+    # Sampling frequencies ==> define 3 sample frequencies 
     omega_sample = np.array([1.0, 5.0, 10.0])
     
     # PSD to Lindblad converter
@@ -57,6 +58,7 @@ def create_quantum_system(config: dict):
 
 
 def create_task_distribution(config: dict):
+    ## Create a distribution of tasks , generating P 
     """Create task distribution P."""
     return TaskDistribution(
         dist_type=config.get('task_dist_type', 'uniform'),
@@ -69,6 +71,7 @@ def create_task_distribution(config: dict):
 
 
 def task_sampler(n_tasks: int, split: str, task_dist: TaskDistribution, rng: np.random.Generator):
+    ## Sample tasks 
     """Sample tasks from distribution."""
     # Different random seeds for train/val/test
     if split == 'train':
@@ -90,6 +93,7 @@ def data_generator(
     config: dict,
     device: torch.device
 ):
+    ## Generates data for a given task 
     """Generate data for a task."""
     # Just return task features - actual simulation happens in loss function
     task_features = torch.tensor(
@@ -109,9 +113,11 @@ def data_generator(
 
 
 def create_loss_function(env, device):
+    #Make a loss function . 
     """Create loss function using QuantumEnvironment."""
     
     def loss_fn(policy: torch.nn.Module, data: dict):
+        ## define a loss function 
         """
         Loss = 1 - Fidelity(ρ_final, ρ_target)
         
@@ -139,7 +145,7 @@ def main(config_path: str):
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    print("=" * 70)
+    print("=" * 70) 
     print("Meta-RL for Quantum Control - Training")
     print("=" * 70)
     print(f"Config: {config_path}\n")
@@ -150,7 +156,7 @@ def main(config_path: str):
     np.random.seed(seed)
     rng = np.random.default_rng(seed)
     
-    # Device
+    # Device --> define a GPU device 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}\n")
     
@@ -170,11 +176,13 @@ def main(config_path: str):
     
     # Create quantum environment (NEW!)
     print("\nSetting up quantum environment...")
+    ## Create a setting for a new enviroment 
     from src.theory.quantum_environment import create_quantum_environment
+    ## Make a quantum enviroment 
     env = create_quantum_environment(config, target_state)
     print(f"  Environment created: {env.get_cache_stats()}")
     
-    # Create task distribution
+    # Create task distribution --> generate a new task distribution 
     print("\nCreating task distribution...")
     task_dist = create_task_distribution(config)
     variance = task_dist.compute_variance()
@@ -191,6 +199,7 @@ def main(config_path: str):
         output_scale=config.get('output_scale', 1.0),
         activation=config.get('activation', 'tanh')
     )
+    ## Make a policy 
     policy = policy.to(device)
     print(f"  Parameters: {policy.count_parameters():,}")
     print(f"  Lipschitz constant: {policy.get_lipschitz_constant():.2f}")
