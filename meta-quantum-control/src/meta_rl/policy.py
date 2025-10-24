@@ -138,7 +138,7 @@ class PulsePolicy(nn.Module):
 
 
 class TaskFeatureEncoder(nn.Module):
-    """
+    """Good. 
     Optional: Learn task representations from raw noise parameters.
     
     Can include:
@@ -169,7 +169,7 @@ class TaskFeatureEncoder(nn.Module):
             )
             final_dim = feature_dim
         else:
-            # Simple MLP encoder
+            # Simple MLP encoder --> encodes feature dim inputs 
             self.encoder = nn.Sequential(
                 nn.Linear(raw_dim, 32),
                 nn.ReLU(),
@@ -180,7 +180,7 @@ class TaskFeatureEncoder(nn.Module):
         self.output_dim = final_dim
     
     def forward(self, raw_features: torch.Tensor) -> torch.Tensor:
-        """
+        """Good. Takes in raw features --> outputs encoded features 
         Encode raw task parameters.
         
         Args:
@@ -200,7 +200,7 @@ class TaskFeatureEncoder(nn.Module):
 
 
 class ValueNetwork(nn.Module):
-    """
+    """ 
     Value function V(s, θ) for advantage estimation in policy gradient.
     Optional for actor-critic style meta-RL.
     """
@@ -214,7 +214,7 @@ class ValueNetwork(nn.Module):
         super().__init__()
         
         input_dim = state_dim + task_feature_dim
-        
+        #Architecture uses a 2 layer NN  with tunable hidden dimensions 
         self.network = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
@@ -224,7 +224,7 @@ class ValueNetwork(nn.Module):
         )
     
     def forward(self, state: torch.Tensor, task_features: torch.Tensor) -> torch.Tensor:
-        """
+        """Good. 
         Estimate value V(s, θ).
         
         Args:
@@ -242,7 +242,7 @@ def create_policy(
     config: dict,
     device: torch.device = torch.device('cpu')
 ) -> PulsePolicy:
-    """
+    """Good. 
     Factory function to create policy from config.
     
     Args:
@@ -272,7 +272,7 @@ def create_policy(
 
 # Example usage
 if __name__ == "__main__":
-    # Create policy
+    # Create policy --> pulse generation 
     policy = PulsePolicy(
         task_feature_dim=3,
         hidden_dim=64,
@@ -285,7 +285,7 @@ if __name__ == "__main__":
     print(f"Policy architecture:\n{policy}")
     print(f"\nTotal parameters: {policy.count_parameters():,}")
     
-    # Test forward pass
+    # Test forward pass 
     task_features = torch.tensor([1.0, 0.1, 5.0])  # (α, A, ωc)
     controls = policy(task_features)
     
@@ -293,13 +293,13 @@ if __name__ == "__main__":
     print(f"Output controls shape: {controls.shape}")
     print(f"Control range: [{controls.min():.3f}, {controls.max():.3f}]")
     
-    # Batch forward
+    # Batch forward 
     batch_tasks = torch.randn(32, 3)
     batch_controls = policy(batch_tasks)
     print(f"\nBatch input shape: {batch_tasks.shape}")
     print(f"Batch output shape: {batch_controls.shape}")
     
-    # Test feature encoder
+    # Test feature encoder 
     encoder = TaskFeatureEncoder(raw_dim=3, feature_dim=16, use_fourier=True)
     encoded_features = encoder(batch_tasks)
     print(f"\nEncoded features shape: {encoded_features.shape}")
