@@ -92,34 +92,38 @@ def evaluate_fidelity(
     if adapt:
         # Clone and adapt
         adapted_policy = deepcopy(policy)
-        adapted_policy.train()
-        optimizer = torch.optim.SGD(adapted_policy.parameters(), lr=inner_lr)
-        
+        adapted_policy.train() # train policy 
+        optimizer = torch.optim.SGD(adapted_policy.parameters(), lr=inner_lr) #optimizer 
+        #Task features
         task_features = torch.tensor(
             task_params.to_array(), dtype=torch.float32, device=device
         )
-        
+        #Loop over adaptation steps 
         for _ in range(K):
-            optimizer.zero_grad()
+            optimizer.zero_grad() #clear grads 
+            #generate controls for each 
             controls = adapted_policy(task_features)
             
-            # Simulate and compute loss
+            # Simulate and compute loss --> 
             controls_np = controls.detach().cpu().numpy()
+            #Grap colapse operators 
             L_ops = quantum_system['psd_to_lindblad'].get_lindblad_operators(task_params)
-            
+            #simulate 
             sim = LindbladSimulator(
                 H0=quantum_system['H0'],
                 H_controls=quantum_system['H_controls'],
                 L_operators=L_ops,
                 method='RK45'
             )
-            
+            #initialize 
             rho0 = np.array([[1, 0], [0, 0]], dtype=complex)
+            #evolve and get final state
             rho_final, _ = sim.evolve(rho0, controls_np, T)
-            
+            #Calculate fidelity 
             fidelity = state_fidelity(rho_final, target_state)
+            #get loss 
             loss = torch.tensor(1.0 - fidelity, dtype=torch.float32, device=device)
-            
+            #backprop on loss 
             loss.backward()
             optimizer.step()
         
@@ -128,23 +132,26 @@ def evaluate_fidelity(
         eval_policy = policy
     
     # Final evaluation
+    #evaluate policy (pulse sequence) 
     eval_policy.eval()
     with torch.no_grad():
         task_features = torch.tensor(
             task_params.to_array(), dtype=torch.float32, device=device
         )
+        #Get controls 
         controls = eval_policy(task_features)
     
     controls_np = controls.cpu().numpy()
+    #Collapse operators, recover 
     L_ops = quantum_system['psd_to_lindblad'].get_lindblad_operators(task_params)
-    
+    #Simulate lindblad output 
     sim = LindbladSimulator(
         H0=quantum_system['H0'],
         H_controls=quantum_system['H_controls'],
         L_operators=L_ops,
         method='RK45'
     )
-    
+    #compare sfinal state and get fidelity 
     rho0 = np.array([[1, 0], [0, 0]], dtype=complex)
     rho_final, _ = sim.evolve(rho0, controls_np, T)
     
@@ -166,31 +173,33 @@ def compute_gap_vs_K(
     """Compute gap as function of adaptation steps K."""
     
     print("\nComputing gap vs K...")
-    T = config.get('horizon', 1.0)
-    inner_lr = config.get('inner_lr', 0.01)
+    T = config.get('horizon', 1.0) #total time horizon 
+    inner_lr = config.get('inner_lr', 0.01) #inner learning rate 
     
     results = {'K': [], 'gap': [], 'meta_fid': [], 'robust_fid': []}
-    
+    #loop over K values 
     for K in tqdm(K_values, desc="K values"):
-        meta_fidelities = []
-        robust_fidelities = []
-        
+        meta_fidelities = [] #meta fidelities 
+        robust_fidelities = [] #robust fidelities 
+        #Loop over tasks 
         for task in test_tasks:
-            # Meta with adaptation
+            # Meta with adaptation 
+            #get meta fidelitiy
             F_meta = evaluate_fidelity(
                 meta_policy, task, quantum_system, target_state, T, device,
                 adapt=True, K=K, inner_lr=inner_lr
             )
             meta_fidelities.append(F_meta)
-            
+            #Robust fidelity 
             # Robust without adaptation
             F_robust = evaluate_fidelity(
                 robust_policy, task, quantum_system, target_state, T, device,
                 adapt=False
             )
             robust_fidelities.append(F_robust)
-        
+        #meta fidelity 
         mean_meta = np.mean(meta_fidelities)
+        #Frobust fidelity 
         mean_robust = np.mean(robust_fidelities)
         gap = mean_meta - mean_robust
         
@@ -214,6 +223,7 @@ def compute_gap_vs_variance(
     device: torch.device,
     n_tasks_per_variance: int = 50
 ) -> dict:
+    #calculate the gap over varying variance of the distribution 
     """Compute gap as function of task distribution variance."""
     
     print("\nComputing gap vs variance...")
@@ -227,7 +237,7 @@ def compute_gap_vs_variance(
     base_alpha = base_config.get('alpha_range', [0.5, 2.0])
     base_A = base_config.get('A_range', [0.05, 0.3])
     base_omega = base_config.get('omega_c_range', [2.0, 8.0])
-    
+    #means 
     alpha_center = np.mean(base_alpha)
     A_center = np.mean(base_A)
     omega_center = np.mean(base_omega)
@@ -248,6 +258,7 @@ def compute_gap_vs_variance(
         ]
         
         # Create task distribution with this variance
+        #Create a task distribution --> chose to be uniform 
         task_dist = TaskDistribution(
             dist_type='uniform',
             ranges={
@@ -256,7 +267,7 @@ def compute_gap_vs_variance(
                 'omega_c': tuple(omega_range)
             }
         )
-        
+        #Variance of distribution 
         variance = task_dist.compute_variance()
         
         # Sample tasks
@@ -266,8 +277,9 @@ def compute_gap_vs_variance(
         # Evaluate
         meta_fidelities = []
         robust_fidelities = []
-        
+        #Loop over each task 
         for task in tasks:
+            #Get fidelity for each 
             F_meta = evaluate_fidelity(
                 meta_policy, task, quantum_system, target_state, T, device,
                 adapt=True, K=K, inner_lr=inner_lr
@@ -279,9 +291,10 @@ def compute_gap_vs_variance(
                 adapt=False
             )
             robust_fidelities.append(F_robust)
-        
+        #Mean fidelity 
         mean_meta = np.mean(meta_fidelities)
         mean_robust = np.mean(robust_fidelities)
+        #Mean gap --> expected value over tasks 
         gap = mean_meta - mean_robust
         
         results['variance'].append(variance)
@@ -315,7 +328,8 @@ def plot_results(gap_vs_K: dict, gap_vs_var: dict, constants: GapConstants, save
         K_theory = np.linspace(0, max(K_vals), 100)
         gap_theory = constants.gap_lower_bound(sigma_sq, K_theory, eta)
         ax.plot(K_theory, gap_theory, '--', linewidth=2, label='Theory Lower Bound', alpha=0.7)
-    
+        
+    ##Number of stpes with optimality gap --> check for agreement 
     ax.set_xlabel('Adaptation Steps K', fontsize=12)
     ax.set_ylabel('Optimality Gap', fontsize=12)
     ax.set_title('Gap vs Adaptation Steps', fontsize=14, fontweight='bold')
@@ -326,7 +340,7 @@ def plot_results(gap_vs_K: dict, gap_vs_var: dict, constants: GapConstants, save
     ax = axes[1]
     variances = np.array(gap_vs_var['variance'])
     gaps_var = np.array(gap_vs_var['gap'])
-    
+    #calculate gap over variance 
     ax.plot(variances, gaps_var, 's-', linewidth=2, markersize=8, label='Empirical Gap')
     
     # Linear fit (theory predicts Gap ∝ σ²)
