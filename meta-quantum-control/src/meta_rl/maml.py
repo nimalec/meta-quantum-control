@@ -26,12 +26,12 @@ class MAML:
     MAML algorithm for meta-learning quantum control policies.
     
     Algorithm:
-    1. Sample batch of tasks θ ~ P
+    1. Sample batch of tasks θ ~ P, sample tasks as noise 
     2. For each task:
-       a. Clone meta-parameters: φ = π₀
-       b. Take K gradient steps: φ → φ - α∇_φ L(φ; θ)
-       c. Evaluate on validation data: L_val(φ; θ)
-    3. Meta-update: π₀ → π₀ - β∇_π₀ Σ_θ L_val(AdaptK(π₀; θ); θ)
+       a. Clone meta-parameters: φ = π₀, take meta parameters
+       b. Take K gradient steps: φ → φ - α∇_φ L(φ; θ) , take K gradient steps for that task 
+       c. Evaluate on validation data: L_val(φ; θ) , evaluate validation data 
+    3. Meta-update: π₀ → π₀ - β∇_π₀ Σ_θ L_val(AdaptK(π₀; θ); θ), update , update policy duraing adaptaion phase. 
     """
     
     def __init__(
@@ -45,21 +45,27 @@ class MAML:
     ):
         """
         Args:
-            policy: Policy network (will be the meta-initialization)
+            policy: Policy network (will be the meta-initialization) 
             inner_lr: Learning rate α for inner loop adaptation
             inner_steps: Number K of inner gradient steps
             meta_lr: Learning rate β for outer meta-update
             first_order: If True, use first-order MAML (FOMAML) - faster but less accurate
             device: torch device
         """
-        self.policy = policy.to(device)
+        ## Policy 
+        self.policy = policy.to(device) 
+        ##Inner LR 
         self.inner_lr = inner_lr
+        ##Inner Steps 
         self.inner_steps = inner_steps
+        # Meta learning rate 
         self.meta_lr = meta_lr
+        #Determines first order 
         self.first_order = first_order
+        #Device 
         self.device = device
         
-        # Meta-optimizer (updates π₀)
+        # Meta-optimizer (updates π₀) --> makes the optimizer module 
         self.meta_optimizer = optim.Adam(self.policy.parameters(), lr=meta_lr)
         
         # Logging
@@ -80,14 +86,17 @@ class MAML:
             loss_fn: Loss function L(policy, data) → scalar
             num_steps: Number of gradient steps (defaults to self.inner_steps)
             
-        Returns:
+        Returns: 
             adapted_policy: Policy after K adaptation steps
             losses: List of losses at each step
         """
+        ##Number of adaptation steps (K) 
         num_steps = num_steps or self.inner_steps
         
         # Clone policy for this task
+        ## Make policy 
         adapted_policy = deepcopy(self.policy)
+        #Train the policy 
         adapted_policy.train()
         
         # Inner optimizer
