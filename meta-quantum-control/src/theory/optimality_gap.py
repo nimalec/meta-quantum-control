@@ -311,7 +311,7 @@ class OptimalityGapComputer:
         tasks: List,
         n_samples: int
     ) -> float:
-        """
+        """Good: but task distance can be reconsered. Should maybe be S(theta) ? 
         Estimate L: Lipschitz constant of fidelity w.r.t. task parameters.
         
         L ≈ max |F(π, θ) - F(π, θ')| / ||θ - θ'||
@@ -329,6 +329,7 @@ class OptimalityGapComputer:
             # Compute task distance
             theta_i = np.array([task_i.alpha, task_i.A, task_i.omega_c])
             theta_j = np.array([task_j.alpha, task_j.A, task_j.omega_c])
+            ## Think about modifying this? 
             task_dist = np.linalg.norm(theta_i - theta_j)
             
             if task_dist > 1e-6:
@@ -342,8 +343,8 @@ class OptimalityGapComputer:
         policy: torch.nn.Module,
         task: Dict
     ) -> float:
-        """
-        Estimate L_F: Lipschitz constant of fidelity w.r.t. policy parameters.
+        """ Good. 
+        Estimate L_F: Lipschitz constant of fidelity w.r.t. policy parameters. (wrt u) 
         
         Via gradient: L_F ≈ ||∇_π F||
         """
@@ -374,7 +375,7 @@ def plot_gap_vs_variance(
     K: int = 5,
     save_path: Optional[str] = None
 ):
-    """
+    """ Good. 
     Plot empirical gap vs task variance and compare to theory.
     
     Theory predicts: Gap ∝ σ²_θ
@@ -412,6 +413,7 @@ def plot_gap_vs_variance(
 
 # Example usage
 if __name__ == "__main__":
+    ## Good 
     print("Optimality Gap Theory Module")
     print("=" * 50)
     
