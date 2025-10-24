@@ -24,7 +24,7 @@ class GapConstants:
     C_K: float    # Inner loop Lipschitz constant
     
     def gap_lower_bound(self, sigma_sq: float, K: int, eta: float) -> float:
-        """
+        """ Good. 
         Compute theoretical lower bound on gap:
         Gap(P, K) ≥ c_gap · σ²_θ · (1 - e^(-μηK))
         """
@@ -33,7 +33,7 @@ class GapConstants:
 
 
 class OptimalityGapComputer:
-    """
+    """ 
     Compute and analyze optimality gaps between meta-learning and robust control.
     """
     
@@ -43,7 +43,7 @@ class OptimalityGapComputer:
         fidelity_fn: Callable,
         device: torch.device = torch.device('cpu')
     ):
-        """
+        """ Good. 
         Args:
             quantum_system: Function that simulates quantum dynamics
             fidelity_fn: Function that computes fidelity
@@ -62,8 +62,9 @@ class OptimalityGapComputer:
         K: int = 5,
         inner_lr: float = 0.01
     ) -> Dict[str, float]:
-        """
+        """ Good. 
         Compute empirical optimality gap.
+        Compares fidelity for robust policy against adapted policy. 
         
         Gap = E_θ[F(AdaptK(π_meta; θ), θ)] - E_θ[F(π_rob, θ)]
         
@@ -83,17 +84,21 @@ class OptimalityGapComputer:
         
         for task_params in task_distribution[:n_samples]:
             # Meta-policy: adapt then evaluate
+            ## Picks up adapted policy after K steps 
             adapted_policy = self._adapt_policy(
                 meta_policy, task_params, K=K, lr=inner_lr
             )
+            ## Fidelity for this policy 
             F_meta = self._evaluate_policy(adapted_policy, task_params)
             meta_fidelities.append(F_meta)
             
             # Robust policy: evaluate directly (no adaptation)
+            ## Do the same for the robust policy 
             F_robust = self._evaluate_policy(robust_policy, task_params)
             robust_fidelities.append(F_robust)
         
         # Compute gap
+        ## gets the gap between the two 
         mean_F_meta = np.mean(meta_fidelities)
         mean_F_robust = np.mean(robust_fidelities)
         gap = mean_F_meta - mean_F_robust
@@ -117,27 +122,30 @@ class OptimalityGapComputer:
         K: int,
         lr: float
     ) -> torch.nn.Module:
-        """Perform K-step gradient adaptation on task."""
+        """Good --> but check how loss is implemented. Maybe check out adaptation is being performed... loss being updated? 
+        Perform K-step gradient adaptation on task."""
         from copy import deepcopy
-        
+        ## Copy policy , train .
         adapted_policy = deepcopy(policy)
         adapted_policy.train()
-        
+        #Define the optimizer 
         optimizer = torch.optim.SGD(adapted_policy.parameters(), lr=lr)
         
         # Get task features
         task_features = self._task_to_features(task_params)
         
+        #Loop over all adapation steps 
         for _ in range(K):
+            #Initialize optimizer
             optimizer.zero_grad()
             
-            # Generate controls
+            # Generate controls for the new task 
             controls = adapted_policy(task_features)
             
-            # Simulate and compute loss
+            # Simulate and compute loss, recover fidelity for new task and control settings 
             fidelity = self._evaluate_controls(controls, task_params)
             loss = 1.0 - fidelity  # Minimize infidelity
-            
+            #Optimize loss (ensure policy is correct here)  --> which loss is this? 
             loss.backward()
             optimizer.step()
         
@@ -148,7 +156,8 @@ class OptimalityGapComputer:
         policy: torch.nn.Module,
         task_params: Dict
     ) -> float:
-        """Evaluate policy on task and return fidelity."""
+        """Good. Calculates fidelity for new policy. 
+        Evaluate policy on task and return fidelity."""
         policy.eval()
         
         with torch.no_grad():
@@ -176,7 +185,8 @@ class OptimalityGapComputer:
         return torch.tensor(fidelity, device=self.device)
     
     def _task_to_features(self, task_params: Dict) -> torch.Tensor:
-        """Convert task parameters to feature tensor."""
+        """Good. 
+        Convert task parameters to feature tensor."""
         # Assuming task_params has 'alpha', 'A', 'omega_c'
         features = torch.tensor([
             task_params.alpha,
@@ -191,7 +201,7 @@ class OptimalityGapComputer:
         task_distribution: List,
         n_samples: int = 50
     ) -> GapConstants:
-        """
+        """Good, except for inner loop Lipschitz.  
         Estimate theoretical constants from data.
         
         Returns:
@@ -227,7 +237,7 @@ class OptimalityGapComputer:
         tasks: List,
         n_samples: int
     ) -> float:
-        """
+        """ Optimal policieses (u*) between two tasks. 
         Estimate C_sep: average separation of task-optimal policies.
         
         C_sep = E[||π*_θ - π*_θ'||²]^(1/2)
@@ -268,24 +278,27 @@ class OptimalityGapComputer:
         mu_estimates = []
         
         for task in tasks[:n_samples]:
-            # Adapt to near-optimal
+            # Adapt to near-optimal 
             adapted = self._adapt_policy(policy, task, K=20, lr=0.01)
             
-            # Compute gradient norm and loss
+            # Compute gradient norm and loss 
             task_features = self._task_to_features(task)
+            ##Generate new controls for an adapted poliicy. 
             controls = adapted(task_features)
-            
+            #Evaluate conttrol. 
             fidelity = self._evaluate_controls(controls, task)
             loss = 1.0 - fidelity
             
             # Compute gradient norm
             loss.backward()
+            ##Recover the gradient itself ==> calculate the norm squared. 
             grad_norm_sq = sum(
                 torch.sum(p.grad ** 2).item()
                 for p in adapted.parameters() if p.grad is not None
             )
             
             # Estimate μ from PL condition (assume L* ≈ 0)
+            ## Compute loss. Divide norm squared by loss itself. 
             if loss.item() > 1e-6:
                 mu_est = grad_norm_sq / (2 * loss.item())
                 mu_estimates.append(mu_est)
