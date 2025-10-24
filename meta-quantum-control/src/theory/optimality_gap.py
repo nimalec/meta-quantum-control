@@ -122,33 +122,43 @@ class OptimalityGapComputer:
         K: int,
         lr: float
     ) -> torch.nn.Module:
-        """Good --> but check how loss is implemented. Maybe check out adaptation is being performed... loss being updated? 
+        """FIXED: Now uses differentiable simulation for proper gradient flow.
         Perform K-step gradient adaptation on task."""
         from copy import deepcopy
-        ## Copy policy , train .
+
         adapted_policy = deepcopy(policy)
         adapted_policy.train()
-        #Define the optimizer 
         optimizer = torch.optim.SGD(adapted_policy.parameters(), lr=lr)
-        
-        # Get task features
-        task_features = self._task_to_features(task_params)
-        
-        #Loop over all adapation steps 
-        for _ in range(K):
-            #Initialize optimizer
-            optimizer.zero_grad()
-            
-            # Generate controls for the new task 
-            controls = adapted_policy(task_features)
-            
-            # Simulate and compute loss, recover fidelity for new task and control settings 
-            fidelity = self._evaluate_controls(controls, task_params)
-            loss = 1.0 - fidelity  # Minimize infidelity
-            #Optimize loss (ensure policy is correct here)  --> which loss is this? 
-            loss.backward()
-            optimizer.step()
-        
+
+        # Check if quantum_system is actually a QuantumEnvironment
+        if hasattr(self.quantum_system, 'compute_loss_differentiable'):
+            # NEW PATH: Use differentiable environment
+            for _ in range(K):
+                optimizer.zero_grad()
+
+                # FIXED: Fully differentiable loss through quantum simulation
+                loss = self.quantum_system.compute_loss_differentiable(
+                    adapted_policy, task_params, self.device
+                )
+
+                loss.backward()
+                optimizer.step()
+        else:
+            # OLD PATH: Fallback to non-differentiable (for backwards compatibility)
+            # WARNING: This won't work properly for gradient-based adaptation!
+            task_features = self._task_to_features(task_params)
+
+            for _ in range(K):
+                optimizer.zero_grad()
+
+                controls = adapted_policy(task_features)
+                fidelity = self._evaluate_controls(controls, task_params)
+                loss = 1.0 - fidelity
+
+                # This won't backprop through simulation properly
+                loss.backward()
+                optimizer.step()
+
         return adapted_policy
     
     def _evaluate_policy(
@@ -311,31 +321,52 @@ class OptimalityGapComputer:
         tasks: List,
         n_samples: int
     ) -> float:
-        """Good: but task distance can be reconsered. Should maybe be S(theta) ? 
+        """FIXED: Now normalizes task parameters before computing distance.
         Estimate L: Lipschitz constant of fidelity w.r.t. task parameters.
-        
-        L ≈ max |F(π, θ) - F(π, θ')| / ||θ - θ'||
+
+        L ≈ max |F(π, θ) - F(π, θ')| / ||θ_normalized - θ'_normalized||
+
+        The normalization accounts for different scales of α, A, and ω_c.
         """
         task_pairs = np.random.choice(len(tasks), size=(n_samples, 2), replace=False)
-        
+
+        # Compute normalization constants from task distribution
+        all_alphas = [t.alpha for t in tasks]
+        all_As = [t.A for t in tasks]
+        all_omegas = [t.omega_c for t in tasks]
+
+        # Use ranges for normalization (robust to outliers)
+        alpha_range = max(all_alphas) - min(all_alphas) + 1e-6
+        A_range = max(all_As) - min(all_As) + 1e-6
+        omega_range = max(all_omegas) - min(all_omegas) + 1e-6
+
         lipschitz_ratios = []
         for i, j in task_pairs:
             task_i, task_j = tasks[i], tasks[j]
-            
+
             # Evaluate fidelity on both tasks
             F_i = self._evaluate_policy(policy, task_i)
             F_j = self._evaluate_policy(policy, task_j)
-            
-            # Compute task distance
-            theta_i = np.array([task_i.alpha, task_i.A, task_i.omega_c])
-            theta_j = np.array([task_j.alpha, task_j.A, task_j.omega_c])
-            ## Think about modifying this? 
-            task_dist = np.linalg.norm(theta_i - theta_j)
-            
+
+            # FIXED: Normalize task parameters before computing distance
+            theta_i_norm = np.array([
+                task_i.alpha / alpha_range,
+                task_i.A / A_range,
+                task_i.omega_c / omega_range
+            ])
+            theta_j_norm = np.array([
+                task_j.alpha / alpha_range,
+                task_j.A / A_range,
+                task_j.omega_c / omega_range
+            ])
+
+            # Compute normalized distance
+            task_dist = np.linalg.norm(theta_i_norm - theta_j_norm)
+
             if task_dist > 1e-6:
                 ratio = abs(F_i - F_j) / task_dist
                 lipschitz_ratios.append(ratio)
-        
+
         return np.max(lipschitz_ratios) if lipschitz_ratios else 1.0
     
     def _estimate_lipschitz_policy(

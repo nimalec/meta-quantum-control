@@ -153,7 +153,8 @@ class DifferentiableLindbladSimulator(nn.Module):
         rho0: torch.Tensor,
         control_sequence: torch.Tensor,
         T: float,
-        return_trajectory: bool = False
+        return_trajectory: bool = False,
+        normalize: bool = True  # NEW: Option to normalize density matrices
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Evolve state from t=0 to t=T under piecewise-constant controls.
@@ -165,6 +166,7 @@ class DifferentiableLindbladSimulator(nn.Module):
             control_sequence: Control pulses (n_segments, n_controls) real tensor
             T: Total evolution time
             return_trajectory: If True, return full trajectory
+            normalize: If True, renormalize density matrix to maintain trace=1
 
         Returns:
             rho_final: Final state (d x d)
@@ -175,6 +177,11 @@ class DifferentiableLindbladSimulator(nn.Module):
 
         # Ensure rho0 is complex
         rho = rho0.to(torch.complex64).to(self.device)
+
+        # NEW: Validate initial state
+        trace0 = torch.trace(rho).real
+        if torch.abs(trace0 - 1.0) > 0.01:
+            print(f"WARNING: Initial density matrix trace = {trace0.item():.6f} (should be 1.0)")
 
         if return_trajectory:
             trajectory = [rho.clone()]
@@ -187,7 +194,7 @@ class DifferentiableLindbladSimulator(nn.Module):
             n_substeps = max(1, int(t_segment / self.dt))
             dt_substep = t_segment / n_substeps
 
-            for _ in range(n_substeps):
+            for substep in range(n_substeps):
                 if self.method == 'euler':
                     rho = self.step_euler(rho, u_seg, dt_substep)
                 elif self.method == 'rk4':
@@ -195,8 +202,30 @@ class DifferentiableLindbladSimulator(nn.Module):
                 else:
                     raise ValueError(f"Unknown method: {self.method}")
 
+                # NEW: Periodic renormalization to prevent drift
+                if normalize and substep % 5 == 0:
+                    trace = torch.trace(rho).real
+                    if trace > 1e-10:  # Avoid division by zero
+                        rho = rho / trace
+
+                    # Check for numerical issues
+                    if torch.isnan(rho).any() or torch.isinf(rho).any():
+                        print(f"ERROR: NaN/Inf in density matrix at segment {seg_idx}, substep {substep}")
+                        # Try to recover by resetting to previous valid state
+                        if return_trajectory and len(trajectory) > 0:
+                            rho = trajectory[-1].clone()
+                        else:
+                            rho = rho0.clone()
+
             if return_trajectory:
                 trajectory.append(rho.clone())
+
+        # NEW: Final validation
+        trace_final = torch.trace(rho).real
+        if torch.abs(trace_final - 1.0) > 0.01:
+            print(f"WARNING: Final density matrix trace = {trace_final.item():.6f} (should be 1.0)")
+            if normalize:
+                rho = rho / trace_final
 
         if return_trajectory:
             trajectory_tensor = torch.stack(trajectory)

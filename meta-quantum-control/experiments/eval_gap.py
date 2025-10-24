@@ -68,95 +68,94 @@ def evaluate_fidelity(
     device: torch.device,
     adapt: bool = False,
     K: int = 5,
-    inner_lr: float = 0.01
+    inner_lr: float = 0.01,
+    env=None  # NEW: Pass QuantumEnvironment for differentiable simulation
 ) -> float:
     """
     Evaluate fidelity of policy on a task.
-    
+
     Args:
         policy: Policy network
         task_params: NoiseParameters
-        quantum_system: System dict
+        quantum_system: System dict (DEPRECATED - use env instead)
         target_state: Target density matrix
         T: Evolution time
         device: torch device
         adapt: If True, perform K gradient steps before evaluation
         K: Number of adaptation steps
         inner_lr: Adaptation learning rate
-        
+        env: QuantumEnvironment instance (NEW - enables differentiable adaptation)
+
     Returns:
         fidelity: Achieved fidelity [0, 1]
     """
     from copy import deepcopy
-    
+
     if adapt:
         # Clone and adapt
         adapted_policy = deepcopy(policy)
-        adapted_policy.train() # train policy 
-        optimizer = torch.optim.SGD(adapted_policy.parameters(), lr=inner_lr) #optimizer 
-        #Task features
-        task_features = torch.tensor(
-            task_params.to_array(), dtype=torch.float32, device=device
-        )
-        #Loop over adaptation steps 
+        adapted_policy.train()
+        optimizer = torch.optim.SGD(adapted_policy.parameters(), lr=inner_lr)
+
+        # K gradient steps with PROPER gradient flow
         for _ in range(K):
-            optimizer.zero_grad() #clear grads 
-            #generate controls for each 
-            controls = adapted_policy(task_features)
-            
-            # Simulate and compute loss --> 
-            controls_np = controls.detach().cpu().numpy()
-            #Grap colapse operators 
+            optimizer.zero_grad()
+
+            # FIXED: Use differentiable loss computation
+            if env is not None:
+                # NEW: Fully differentiable path through quantum simulation
+                loss = env.compute_loss_differentiable(adapted_policy, task_params, device)
+            else:
+                # FALLBACK: Old non-differentiable path (for backwards compatibility)
+                task_features = torch.tensor(
+                    task_params.to_array(), dtype=torch.float32, device=device
+                )
+                controls = adapted_policy(task_features)
+                controls_np = controls.detach().cpu().numpy()
+                L_ops = quantum_system['psd_to_lindblad'].get_lindblad_operators(task_params)
+                sim = LindbladSimulator(
+                    H0=quantum_system['H0'],
+                    H_controls=quantum_system['H_controls'],
+                    L_operators=L_ops,
+                    method='RK45'
+                )
+                rho0 = np.array([[1, 0], [0, 0]], dtype=complex)
+                rho_final, _ = sim.evolve(rho0, controls_np, T)
+                fidelity_np = state_fidelity(rho_final, target_state)
+                loss = torch.tensor(1.0 - fidelity_np, dtype=torch.float32, device=device)
+
+            # Backprop (now with actual gradients!)
+            loss.backward()
+            optimizer.step()
+
+        eval_policy = adapted_policy
+    else:
+        eval_policy = policy
+
+    # Final evaluation
+    eval_policy.eval()
+    with torch.no_grad():
+        if env is not None:
+            # Use environment for evaluation
+            fidelity = env.evaluate_policy(eval_policy, task_params, device)
+        else:
+            # Fallback to old method
+            task_features = torch.tensor(
+                task_params.to_array(), dtype=torch.float32, device=device
+            )
+            controls = eval_policy(task_features)
+            controls_np = controls.cpu().numpy()
             L_ops = quantum_system['psd_to_lindblad'].get_lindblad_operators(task_params)
-            #simulate 
             sim = LindbladSimulator(
                 H0=quantum_system['H0'],
                 H_controls=quantum_system['H_controls'],
                 L_operators=L_ops,
                 method='RK45'
             )
-            #initialize 
             rho0 = np.array([[1, 0], [0, 0]], dtype=complex)
-            #evolve and get final state
             rho_final, _ = sim.evolve(rho0, controls_np, T)
-            #Calculate fidelity 
             fidelity = state_fidelity(rho_final, target_state)
-            #get loss 
-            loss = torch.tensor(1.0 - fidelity, dtype=torch.float32, device=device)
-            #backprop on loss 
-            loss.backward()
-            optimizer.step()
-        
-        eval_policy = adapted_policy
-    else:
-        eval_policy = policy
-    
-    # Final evaluation
-    #evaluate policy (pulse sequence) 
-    eval_policy.eval()
-    with torch.no_grad():
-        task_features = torch.tensor(
-            task_params.to_array(), dtype=torch.float32, device=device
-        )
-        #Get controls 
-        controls = eval_policy(task_features)
-    
-    controls_np = controls.cpu().numpy()
-    #Collapse operators, recover 
-    L_ops = quantum_system['psd_to_lindblad'].get_lindblad_operators(task_params)
-    #Simulate lindblad output 
-    sim = LindbladSimulator(
-        H0=quantum_system['H0'],
-        H_controls=quantum_system['H_controls'],
-        L_operators=L_ops,
-        method='RK45'
-    )
-    #compare sfinal state and get fidelity 
-    rho0 = np.array([[1, 0], [0, 0]], dtype=complex)
-    rho_final, _ = sim.evolve(rho0, controls_np, T)
-    
-    fidelity = state_fidelity(rho_final, target_state)
-    
+
     return fidelity
 
 
@@ -168,48 +167,47 @@ def compute_gap_vs_K(
     quantum_system: dict,
     target_state: np.ndarray,
     config: dict,
-    device: torch.device
+    device: torch.device,
+    env=None  # NEW: Pass environment for differentiable adaptation
 ) -> dict:
     """Compute gap as function of adaptation steps K."""
-    
+
     print("\nComputing gap vs K...")
-    T = config.get('horizon', 1.0) #total time horizon 
-    inner_lr = config.get('inner_lr', 0.01) #inner learning rate 
-    
+    T = config.get('horizon', 1.0)
+    inner_lr = config.get('inner_lr', 0.01)
+
     results = {'K': [], 'gap': [], 'meta_fid': [], 'robust_fid': []}
-    #loop over K values 
+
     for K in tqdm(K_values, desc="K values"):
-        meta_fidelities = [] #meta fidelities 
-        robust_fidelities = [] #robust fidelities 
-        #Loop over tasks 
+        meta_fidelities = []
+        robust_fidelities = []
+
         for task in test_tasks:
-            # Meta with adaptation 
-            #get meta fidelitiy
+            # Meta with adaptation (NOW WITH PROPER GRADIENTS!)
             F_meta = evaluate_fidelity(
                 meta_policy, task, quantum_system, target_state, T, device,
-                adapt=True, K=K, inner_lr=inner_lr
+                adapt=True, K=K, inner_lr=inner_lr, env=env
             )
             meta_fidelities.append(F_meta)
-            #Robust fidelity 
+
             # Robust without adaptation
             F_robust = evaluate_fidelity(
                 robust_policy, task, quantum_system, target_state, T, device,
-                adapt=False
+                adapt=False, env=env
             )
             robust_fidelities.append(F_robust)
-        #meta fidelity 
+
         mean_meta = np.mean(meta_fidelities)
-        #Frobust fidelity 
         mean_robust = np.mean(robust_fidelities)
         gap = mean_meta - mean_robust
-        
+
         results['K'].append(K)
         results['gap'].append(gap)
         results['meta_fid'].append(mean_meta)
         results['robust_fid'].append(mean_robust)
-        
+
         print(f"  K={K:2d}: Gap = {gap:.4f}, Meta = {mean_meta:.4f}, Robust = {mean_robust:.4f}")
-    
+
     return results
 
 
@@ -221,27 +219,27 @@ def compute_gap_vs_variance(
     quantum_system: dict,
     target_state: np.ndarray,
     device: torch.device,
-    n_tasks_per_variance: int = 50
+    n_tasks_per_variance: int = 50,
+    env=None  # NEW: Pass environment for differentiable adaptation
 ) -> dict:
-    #calculate the gap over varying variance of the distribution 
     """Compute gap as function of task distribution variance."""
-    
+
     print("\nComputing gap vs variance...")
     K = base_config.get('inner_steps', 5)
     T = base_config.get('horizon', 1.0)
     inner_lr = base_config.get('inner_lr', 0.01)
-    
+
     results = {'variance': [], 'gap': [], 'meta_fid': [], 'robust_fid': []}
-    
+
     # Base ranges
     base_alpha = base_config.get('alpha_range', [0.5, 2.0])
     base_A = base_config.get('A_range', [0.05, 0.3])
     base_omega = base_config.get('omega_c_range', [2.0, 8.0])
-    #means 
+
     alpha_center = np.mean(base_alpha)
     A_center = np.mean(base_A)
     omega_center = np.mean(base_omega)
-    
+
     for mult in tqdm(variance_multipliers, desc="Variance levels"):
         # Scale ranges around center
         alpha_range = [
@@ -256,9 +254,8 @@ def compute_gap_vs_variance(
             omega_center - (omega_center - base_omega[0]) * mult,
             omega_center + (base_omega[1] - omega_center) * mult
         ]
-        
+
         # Create task distribution with this variance
-        #Create a task distribution --> chose to be uniform 
         task_dist = TaskDistribution(
             dist_type='uniform',
             ranges={
@@ -267,43 +264,41 @@ def compute_gap_vs_variance(
                 'omega_c': tuple(omega_range)
             }
         )
-        #Variance of distribution 
         variance = task_dist.compute_variance()
-        
+
         # Sample tasks
         rng = np.random.default_rng(42)
         tasks = task_dist.sample(n_tasks_per_variance, rng)
-        
+
         # Evaluate
         meta_fidelities = []
         robust_fidelities = []
-        #Loop over each task 
+
         for task in tasks:
-            #Get fidelity for each 
+            # Now with proper gradient flow!
             F_meta = evaluate_fidelity(
                 meta_policy, task, quantum_system, target_state, T, device,
-                adapt=True, K=K, inner_lr=inner_lr
+                adapt=True, K=K, inner_lr=inner_lr, env=env
             )
             meta_fidelities.append(F_meta)
-            
+
             F_robust = evaluate_fidelity(
                 robust_policy, task, quantum_system, target_state, T, device,
-                adapt=False
+                adapt=False, env=env
             )
             robust_fidelities.append(F_robust)
-        #Mean fidelity 
+
         mean_meta = np.mean(meta_fidelities)
         mean_robust = np.mean(robust_fidelities)
-        #Mean gap --> expected value over tasks 
         gap = mean_meta - mean_robust
-        
+
         results['variance'].append(variance)
         results['gap'].append(gap)
         results['meta_fid'].append(mean_meta)
         results['robust_fid'].append(mean_robust)
-        
+
         print(f"  σ²={variance:.4f}: Gap = {gap:.4f}")
-    
+
     return results
 
 
@@ -369,85 +364,93 @@ def plot_results(gap_vs_K: dict, gap_vs_var: dict, constants: GapConstants, save
 
 def main(args):
     """Main evaluation script."""
-    
+
     # Load config
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
-    
+
     print("=" * 70)
-    print("Optimality Gap Evaluation")
+    print("Optimality Gap Evaluation (WITH DIFFERENTIABLE ADAPTATION!)")
     print("=" * 70)
     print(f"Config: {args.config}\n")
-    
+
     # Device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}\n")
-    
+
     # Create quantum system
     print("Setting up quantum system...")
     quantum_system = create_quantum_system(config)
-    
+
     # Target state
     target_gate_name = config.get('target_gate', 'hadamard')
     if target_gate_name == 'hadamard':
         U_target = TargetGates.hadamard()
     else:
         U_target = TargetGates.pauli_x()
-    
+
     ket_0 = np.array([1, 0], dtype=complex)
     target_state = np.outer(U_target @ ket_0, (U_target @ ket_0).conj())
-    
+
+    # NEW: Create QuantumEnvironment for differentiable adaptation
+    print("\nCreating quantum environment for differentiable adaptation...")
+    from src.theory.quantum_environment import create_quantum_environment
+    env = create_quantum_environment(config, target_state)
+    print(f"  Environment created: {env.get_cache_stats()}")
+    print("  ✓ Gradient flow through quantum simulation enabled!")
+
     # Load models
     print("\nLoading trained models...")
     meta_policy, robust_policy = load_models(
         args.meta_path, args.robust_path, config, device
     )
-    
+
     # Sample test tasks
     print("\nSampling test tasks...")
     task_dist = create_task_distribution(config)
     rng = np.random.default_rng(config.get('seed', 42) + 200000)
     test_tasks = task_dist.sample(config.get('gap_n_samples', 100), rng)
     print(f"  Sampled {len(test_tasks)} test tasks")
-    
+
     # Estimate theoretical constants
     print("\nEstimating theoretical constants...")
     # This is expensive - can be cached
     # constants = gap_computer.estimate_constants(meta_policy, test_tasks[:20], n_samples=20)
     constants = None  # Skip for now, or load from cache
-    
-    # Compute gap vs K
+
+    # Compute gap vs K (NOW WITH PROPER GRADIENTS!)
     K_values = config.get('gap_K_values', [1, 3, 5, 10, 20])
     gap_vs_K_results = compute_gap_vs_K(
         meta_policy, robust_policy, test_tasks[:50], K_values,
-        quantum_system, target_state, config, device
+        quantum_system, target_state, config, device, env=env
     )
-    
-    # Compute gap vs variance
+
+    # Compute gap vs variance (NOW WITH PROPER GRADIENTS!)
     variance_multipliers = [0.5, 0.75, 1.0, 1.25, 1.5]
     gap_vs_var_results = compute_gap_vs_variance(
         meta_policy, robust_policy, config, variance_multipliers,
-        quantum_system, target_state, device, n_tasks_per_variance=30
+        quantum_system, target_state, device, n_tasks_per_variance=30, env=env
     )
-    
+
     # Plot
     save_dir = Path(args.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
-    
+
     plot_results(gap_vs_K_results, gap_vs_var_results, constants, save_dir)
-    
+
     # Save results
     import json
     results = {
         'gap_vs_K': gap_vs_K_results,
         'gap_vs_variance': gap_vs_var_results
     }
-    
+
     results_path = save_dir / 'gap_results.json'
     with open(results_path, 'w') as f:
         json.dump(results, f, indent=2)
     print(f"Results saved to {results_path}")
-    
+
+    print(f"\nFinal cache stats: {env.get_cache_stats()}")
     print("\n" + "=" * 70)
     print("Evaluation complete!")
     print("=" * 70)

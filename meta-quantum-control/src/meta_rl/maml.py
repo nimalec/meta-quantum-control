@@ -169,29 +169,28 @@ class MAML:
         loss_fn: Callable,
         use_higher: bool = True
     ) -> Dict[str, float]:
-        """ Good 
+        """IMPROVED: Added NaN/Inf checks for numerical stability.
         Single meta-training step on a batch of tasks.
-        
+
         Args:
             task_batch: List of task dictionaries, each with 'support' and 'query'
             loss_fn: Loss function
             use_higher: If True, use higher library for second-order gradients
-            
+
         Returns:
             metrics: Dictionary of training metrics
         """
-        #clears meta grad 
         self.meta_optimizer.zero_grad()
-        
+
         meta_loss = 0.0
         task_losses = []
-        
+
         for task_data in task_batch:
             if use_higher and not self.first_order:
                 # Second-order MAML (requires higher library)
                 if not HIGHER_AVAILABLE:
                     # Fall back to first-order if higher not available
-                    adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn) ## iner loop adaptation 
+                    adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
                     query_loss = loss_fn(adapted_policy, task_data['query'])
                 else:
                     fmodel, inner_losses = self.inner_loop_higher(task_data, loss_fn)
@@ -199,37 +198,61 @@ class MAML:
                     query_loss = loss_fn(fmodel, task_data['query'])
 
             else:
-                # First-order MAML or manual implementation  --> first order optimization 
+                # First-order MAML or manual implementation
                 adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
 
                 # Evaluate on query set
                 query_loss = loss_fn(adapted_policy, task_data['query'])
-            
+
+            # NEW: Check for NaN/Inf
+            if torch.isnan(query_loss) or torch.isinf(query_loss):
+                print(f"WARNING: Invalid loss detected (NaN or Inf): {query_loss.item()}")
+                print(f"  Inner losses: {inner_losses}")
+                # Skip this task or use fallback value
+                query_loss = torch.tensor(1.0, device=self.device)
+
             meta_loss += query_loss
             task_losses.append(query_loss.item())
-        
-        # Average over tasks  --> normalize 
+
+        # Average over tasks
         meta_loss = meta_loss / len(task_batch)
-        
+
+        # NEW: Check meta_loss before backward
+        if torch.isnan(meta_loss) or torch.isinf(meta_loss):
+            print(f"ERROR: Invalid meta_loss detected: {meta_loss.item()}")
+            print("  Skipping this meta-update to prevent corruption")
+            return {
+                'meta_loss': float('nan'),
+                'mean_task_loss': np.mean(task_losses),
+                'std_task_loss': np.std(task_losses),
+                'min_task_loss': np.min(task_losses),
+                'max_task_loss': np.max(task_losses),
+                'error': 'invalid_loss'
+            }
+
         # Meta-gradient step
         meta_loss.backward()
-        
-        # Optional: gradient clipping
-        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
-        
-        self.meta_optimizer.step()
-        
+
+        # NEW: Check gradients for NaN/Inf
+        grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
+        if torch.isnan(grad_norm) or torch.isinf(grad_norm):
+            print(f"WARNING: Invalid gradient norm detected: {grad_norm.item()}")
+            print("  Skipping optimizer step")
+        else:
+            self.meta_optimizer.step()
+
         # Logging
         metrics = {
             'meta_loss': meta_loss.item(),
             'mean_task_loss': np.mean(task_losses),
             'std_task_loss': np.std(task_losses),
             'min_task_loss': np.min(task_losses),
-            'max_task_loss': np.max(task_losses)
+            'max_task_loss': np.max(task_losses),
+            'grad_norm': grad_norm.item()  # NEW: Log gradient norm
         }
-        
+
         self.meta_train_losses.append(meta_loss.item())
-        
+
         return metrics
     
     def meta_validate(
