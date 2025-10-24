@@ -11,7 +11,7 @@ from typing import Tuple, Optional
 
 
 class PulsePolicy(nn.Module):
-    """
+    """ Good. 
     Neural network policy that outputs control pulse sequences.
     
     Architecture:
@@ -28,7 +28,7 @@ class PulsePolicy(nn.Module):
         output_scale: float = 1.0,
         activation: str = 'tanh'
     ):
-        """
+        """ Good. 
         Args:
             task_feature_dim: Dimension of task encoding
             hidden_dim: Hidden layer width
@@ -39,7 +39,7 @@ class PulsePolicy(nn.Module):
             activation: 'tanh', 'relu', 'elu'
         """
         super().__init__()
-        
+        #Good 
         self.task_feature_dim = task_feature_dim
         self.hidden_dim = hidden_dim
         self.n_segments = n_segments
@@ -68,7 +68,8 @@ class PulsePolicy(nn.Module):
         self._init_weights()
     
     def _get_activation(self, name: str) -> nn.Module:
-        """Get activation function."""
+        """Good. 
+        Get activation function."""
         if name == 'tanh':
             return nn.Tanh()
         elif name == 'relu':
@@ -79,7 +80,8 @@ class PulsePolicy(nn.Module):
             raise ValueError(f"Unknown activation: {name}")
     
     def _init_weights(self):
-        """Initialize network weights."""
+        """Good. 
+        Initialize network weights."""
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.orthogonal_(m.weight, gain=0.5)
@@ -87,7 +89,7 @@ class PulsePolicy(nn.Module):
                     nn.init.constant_(m.bias, 0.0)
     
     def forward(self, task_features: torch.Tensor) -> torch.Tensor:
-        """
+        """Good. 
         Generate control pulses for given task.
         
         Args:
@@ -115,7 +117,7 @@ class PulsePolicy(nn.Module):
         return controls
     
     def get_lipschitz_constant(self) -> float:
-        """
+        """ Good. 
         Estimate Lipschitz constant L_net via spectral norms.
         L_net ≤ ∏ℓ ||Wℓ||₂
         """
