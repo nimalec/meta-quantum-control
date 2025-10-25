@@ -11,8 +11,8 @@ target_gate: 'hadamard'  # 'hadamard', 'pauli_x', 'pauli_y'
 # Task Distribution
 task_dist_type: 'uniform'
 alpha_range: [0.5, 2.0]      # Spectral exponent range
-A_range: [0.05, 0.3]          # Amplitude range
-omega_c_range: [2.0, 8.0]     # Cutoff frequency range
+A_range: [0.02, 0.15]        # FIXED: Reduced from [0.05, 0.3] for easier initial training
+omega_c_range: [2.0, 8.0]    # Cutoff frequency range
 
 # Policy Network
 task_feature_dim: 3
@@ -20,14 +20,14 @@ hidden_dim: 128
 n_hidden_layers: 2
 n_segments: 20
 n_controls: 2
-output_scale: 0.5
+output_scale: 1.0  # FIXED: Increased from 0.5 to allow stronger control signals
 activation: 'tanh'
 
 # MAML Hyperparameters
-inner_lr: 0.01
-inner_steps: 5
+inner_lr: 0.005  # FIXED: Reduced from 0.01 for better stability
+inner_steps: 3  # FIXED: Reduced from 5 for faster initial training
 meta_lr: 0.001
-first_order: false  # Set to true for FOMAML (faster but less accurate)
+first_order: false  # Set to true for FOMAML (faster but less accurate, good for debugging)
 
 # Training
 n_iterations: 2000

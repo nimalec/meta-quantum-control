@@ -248,7 +248,7 @@ class QuantumEnvironment:
         device: torch.device = torch.device('cpu'),
         use_rk4: bool = True
     ) -> torch.Tensor:
-        """ Good: OK... this is the differentiable version that propogates gradients. 
+        """ Good: OK... this is the differentiable version that propogates gradients.
         Compute loss (infidelity) with FULL gradient support through quantum simulation.
 
         This is the NEW differentiable version that allows gradients to flow through
@@ -282,11 +282,12 @@ class QuantumEnvironment:
         L_ops_torch = [numpy_to_torch_complex(L, device) for L in L_ops_numpy]
 
         # Create differentiable simulator
+        # FIXED: Use smaller time step for better accuracy
         sim = DifferentiableLindbladSimulator(
             H0=H0_torch,
             H_controls=H_controls_torch,
             L_operators=L_ops_torch,
-            dt=0.05,
+            dt=0.01,  # FIXED: Reduced from 0.05 for better accuracy
             method='rk4' if use_rk4 else 'euler',
             device=device
         )

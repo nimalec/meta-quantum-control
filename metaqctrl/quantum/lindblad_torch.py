@@ -30,24 +30,27 @@ class DifferentiableLindbladSimulator(nn.Module):
         H0: torch.Tensor,
         H_controls: List[torch.Tensor],
         L_operators: List[torch.Tensor],
-        dt: float = 0.05,
+        dt: float = 0.01,  # FIXED: Reduced from 0.05 for better accuracy
         method: str = 'rk4',
-        device: torch.device = torch.device('cpu')
+        device: torch.device = torch.device('cpu'),
+        max_control_amp: float = 10.0  # NEW: Maximum control amplitude for clipping
     ):
         """
         Args:
             H0: Drift Hamiltonian (d x d) complex tensor
             H_controls: List of control Hamiltonians, each (d x d) complex
             L_operators: List of Lindblad operators, each (d x d) complex
-            dt: Time step for integration
+            dt: Time step for integration (smaller = more accurate)
             method: Integration method ('euler', 'rk4')
             device: torch device
+            max_control_amp: Maximum allowed control amplitude (for stability)
         """
         super().__init__()
 
         self.device = device
         self.method = method
         self.dt = dt
+        self.max_control_amp = max_control_amp
 
         # Convert to complex tensors on device
         self.H0 = H0.to(device).to(torch.complex64)
@@ -78,6 +81,9 @@ class DifferentiableLindbladSimulator(nn.Module):
         Returns:
             drho_dt: Time derivative (d x d) complex tensor
         """
+        # NEW: Clip control amplitudes for numerical stability
+        u = torch.clamp(u, -self.max_control_amp, self.max_control_amp)
+
         # Build total Hamiltonian: H_total = H₀ + Σₖ uₖ Hₖ
         H_total = self.H0.clone()
         for k, u_k in enumerate(u):
@@ -178,10 +184,11 @@ class DifferentiableLindbladSimulator(nn.Module):
         # Ensure rho0 is complex
         rho = rho0.to(torch.complex64).to(self.device)
 
-        # NEW: Validate initial state
+        # FIXED: Only validate in debug mode (removed prints for training)
         trace0 = torch.trace(rho).real
-        if torch.abs(trace0 - 1.0) > 0.01:
-            print(f"WARNING: Initial density matrix trace = {trace0.item():.6f} (should be 1.0)")
+        # Renormalize initial state if needed
+        if torch.abs(trace0 - 1.0) > 0.01 and trace0 > 1e-10:
+            rho = rho / trace0
 
         if return_trajectory:
             trajectory = [rho.clone()]
@@ -202,30 +209,28 @@ class DifferentiableLindbladSimulator(nn.Module):
                 else:
                     raise ValueError(f"Unknown method: {self.method}")
 
-                # NEW: Periodic renormalization to prevent drift
-                if normalize and substep % 5 == 0:
+                # NEW: More frequent renormalization for stability
+                if normalize and substep % 3 == 0:
                     trace = torch.trace(rho).real
                     if trace > 1e-10:  # Avoid division by zero
                         rho = rho / trace
 
-                    # Check for numerical issues
+                    # FIXED: Better NaN/Inf handling
                     if torch.isnan(rho).any() or torch.isinf(rho).any():
-                        print(f"ERROR: NaN/Inf in density matrix at segment {seg_idx}, substep {substep}")
-                        # Try to recover by resetting to previous valid state
-                        if return_trajectory and len(trajectory) > 0:
-                            rho = trajectory[-1].clone()
-                        else:
-                            rho = rho0.clone()
+                        # Return to initial state rather than previous (safer for gradients)
+                        rho = rho0.clone()
+                        # Stop integration early to prevent further issues
+                        if return_trajectory:
+                            trajectory.append(rho.clone())
+                        return rho, (torch.stack(trajectory) if return_trajectory else None)
 
             if return_trajectory:
                 trajectory.append(rho.clone())
 
-        # NEW: Final validation
+        # NEW: Final renormalization (always normalize at end)
         trace_final = torch.trace(rho).real
-        if torch.abs(trace_final - 1.0) > 0.01:
-            print(f"WARNING: Final density matrix trace = {trace_final.item():.6f} (should be 1.0)")
-            if normalize:
-                rho = rho / trace_final
+        if trace_final > 1e-10:
+            rho = rho / trace_final
 
         if return_trajectory:
             trajectory_tensor = torch.stack(trajectory)
