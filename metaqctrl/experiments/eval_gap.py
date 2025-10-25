@@ -18,13 +18,13 @@ from pathlib import Path
 import argparse
 from tqdm import tqdm
 
-from src.quantum.lindblad import LindbladSimulator
-from src.quantum.noise_models import TaskDistribution, PSDToLindblad, NoisePSDModel
-from src.quantum.gates import state_fidelity, TargetGates
-from src.meta_rl.policy import PulsePolicy
-from src.meta_rl.maml import MAML
-from src.baselines.robust_control import RobustPolicy
-from src.theory.optimality_gap import OptimalityGapComputer, GapConstants
+from metaqctrl.src.quantum.lindblad import LindbladSimulator
+from metaqctrl.src.quantum.noise_models import TaskDistribution, PSDToLindblad, NoisePSDModel
+from metaqctrl.src.quantum.gates import state_fidelity, TargetGates
+from metaqctrl.src.meta_rl.policy import PulsePolicy
+from metaqctrl.src.meta_rl.maml import MAML
+from metaqctrl.src.baselines.robust_control import RobustPolicy
+from metaqctrl.src.theory.optimality_gap import OptimalityGapComputer, GapConstants
 
 # Import system creation from train_meta
 from train_meta import create_quantum_system, create_task_distribution
