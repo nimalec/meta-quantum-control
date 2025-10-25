@@ -25,9 +25,6 @@ make all-figures
 # Install dependencies (creates .venv and installs all packages from pyproject.toml)
 uv sync
 
-# Run experiments
-uv run python experiments/train_meta.py
-
 # Or activate the environment
 source .venv/bin/activate  # Mac/Linux
 .venv\Scripts\activate     # Windows
@@ -56,9 +53,6 @@ See `docs/` directory for complete documentation.
 ```bash
 # Adding packages
 uv add <package>
-
-# Running experiments
-uv run python experiments/train_meta.py --config configs/experiment_config.yaml
 ```
 
 ## Citation
