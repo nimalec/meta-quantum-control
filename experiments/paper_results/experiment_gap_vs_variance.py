@@ -20,17 +20,17 @@ from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+#sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from quantum.lindblad import LindbladSimulator
-from quantum.noise_models import TaskDistribution, NoiseParameters, PSDToLindblad
-from quantum.gates import state_fidelity
-from meta_rl.policy import PulsePolicy
-from meta_rl.maml import MAML
-from baselines.robust_control import RobustPolicy
-from theory.quantum_environment import create_quantum_environment
-from theory.optimality_gap import OptimalityGapComputer, GapConstants
-from theory.physics_constants import compute_control_relevant_variance
+from metaqctrl.quantum.lindblad import LindbladSimulator
+from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters, PSDToLindblad
+from metaqctrl.quantum.gates import state_fidelity
+from metaqctrl.meta_rl.policy import PulsePolicy
+from metaqctrl.meta_rl.maml import MAML
+from metaqctrl.baselines.robust_control import RobustPolicy
+from metaqctrl.theory.quantum_environment import create_quantum_environment
+from metaqctrl.theory.optimality_gap import OptimalityGapComputer, GapConstants
+from metaqctrl.theory.physics_constants import compute_control_relevant_variance
 
 
 def linear_model(sigma2_S, slope):
