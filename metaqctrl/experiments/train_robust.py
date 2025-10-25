@@ -15,8 +15,8 @@ from pathlib import Path
 from datetime import datetime
 import argparse
 
-from src.meta_rl.policy import PulsePolicy
-from src.baselines.robust_control import RobustPolicy, RobustTrainer
+from metaqctrl.src.meta_rl.policy import PulsePolicy
+from metaqctrl.src.baselines.robust_control import RobustPolicy, RobustTrainer
 
 # Import system creation from train_meta
 from train_meta import (
@@ -26,7 +26,7 @@ from train_meta import (
     data_generator,
     create_loss_function
 )
-from src.quantum.gates import TargetGates
+from metaqctrl.src.quantum.gates import TargetGates
 
 
 def main(config_path: str):
