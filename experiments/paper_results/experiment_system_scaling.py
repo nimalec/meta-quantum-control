@@ -20,12 +20,12 @@ import json
 from typing import Dict
 
 # Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+#sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from quantum.lindblad import LindbladSimulator
-from quantum.noise_models import TaskDistribution, NoiseParameters
-from theory.quantum_environment import create_quantum_environment
-from theory.physics_constants import (
+from metaqctrl.quantum.lindblad import LindbladSimulator
+from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters
+from metaqctrl.theory.quantum_environment import create_quantum_environment
+from metaqctrl.theory.physics_constants import (
     compute_spectral_gap,
     estimate_pl_constant,
     estimate_all_constants
