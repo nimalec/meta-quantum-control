@@ -275,18 +275,20 @@ class MAML:
         val_losses = []
         adapted_losses = []
 
-        # FIXED: Wrap entire validation in no_grad since we don't need gradients
-        with torch.no_grad():
-            for task_data in val_tasks:
-                # Loss before adaptation
+        # FIXED: Don't use no_grad during validation - we need gradients for inner loop!
+        # We just won't backprop to the meta-parameters (deepcopy handles this)
+        for task_data in val_tasks:
+            # Loss before adaptation (can be done without grad)
+            with torch.no_grad():
                 pre_loss = loss_fn(self.policy, task_data['query'])
                 val_losses.append(pre_loss.item())
 
-                # Adapt on support set
-                # Note: inner_loop uses a deepcopy, so meta-parameters won't be affected
-                adapted_policy, _ = self.inner_loop(task_data, loss_fn)
+            # Adapt on support set (NEEDS gradients for inner loop!)
+            # Note: inner_loop uses a deepcopy, so meta-parameters won't be affected
+            adapted_policy, _ = self.inner_loop(task_data, loss_fn)
 
-                # Loss after adaptation
+            # Loss after adaptation (no grad needed)
+            with torch.no_grad():
                 post_loss = loss_fn(adapted_policy, task_data['query'])
                 adapted_losses.append(post_loss.item())
 
@@ -451,6 +453,7 @@ class MAMLTrainer:
                       f"Meta Loss: {train_metrics['meta_loss']:.4f} | "
                       f"Task Loss: {train_metrics['mean_task_loss']:.4f} ± "
                       f"{train_metrics['std_task_loss']:.4f} | "
+                      f"Range: [{train_metrics['min_task_loss']:.4f}, {train_metrics['max_task_loss']:.4f}] | "
                       f"Grad Norm: {grad_norm:.4f}")
             
             # Validation

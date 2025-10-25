@@ -30,7 +30,7 @@ class DifferentiableLindbladSimulator(nn.Module):
         H0: torch.Tensor,
         H_controls: List[torch.Tensor],
         L_operators: List[torch.Tensor],
-        dt: float = 0.01,  # FIXED: Reduced from 0.05 for better accuracy
+        dt: float = 0.005,  # FIXED: Reduced from 0.01 for better numerical stability
         method: str = 'rk4',
         device: torch.device = torch.device('cpu'),
         max_control_amp: float = 10.0  # NEW: Maximum control amplitude for clipping
@@ -209,20 +209,24 @@ class DifferentiableLindbladSimulator(nn.Module):
                 else:
                     raise ValueError(f"Unknown method: {self.method}")
 
-                # NEW: More frequent renormalization for stability
-                if normalize and substep % 3 == 0:
+                # FIXED: Normalize EVERY substep for better stability
+                if normalize:
                     trace = torch.trace(rho).real
                     if trace > 1e-10:  # Avoid division by zero
                         rho = rho / trace
-
-                    # FIXED: Better NaN/Inf handling
-                    if torch.isnan(rho).any() or torch.isinf(rho).any():
-                        # Return to initial state rather than previous (safer for gradients)
+                    else:
+                        # Trace collapsed - reset to initial state
                         rho = rho0.clone()
-                        # Stop integration early to prevent further issues
                         if return_trajectory:
                             trajectory.append(rho.clone())
                         return rho, (torch.stack(trajectory) if return_trajectory else None)
+
+                    # FIXED: Better NaN/Inf handling - reset but don't stop
+                    if torch.isnan(rho).any() or torch.isinf(rho).any():
+                        # Reset to initial state (maintains gradient flow better)
+                        rho = rho0.clone()
+                        # Continue integration to allow gradient signal
+                        # (stopping abruptly breaks autodiff)
 
             if return_trajectory:
                 trajectory.append(rho.clone())
