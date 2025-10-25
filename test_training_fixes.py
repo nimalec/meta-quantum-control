@@ -103,7 +103,7 @@ task_features = torch.randn(3, device=device)
 controls_out = policy(task_features)
 print(f"  Output shape: {controls_out.shape}")
 print(f"  Output range: [{controls_out.min().item():.2f}, {controls_out.max().item():.2f}]")
-print(f"  ✓ Policy works!")
+print(f"  Policy works!")
 
 # 3. Test Quantum Environment with Differentiable Loss
 print("\n3. Testing Quantum Environment with Differentiable Loss...")
@@ -148,9 +148,9 @@ print(f"  All parameters have gradients: {has_grad}")
 if has_grad:
     total_grad_norm = torch.sqrt(sum(torch.sum(p.grad**2) for p in policy.parameters())).item()
     print(f"  Total gradient norm: {total_grad_norm:.4e}")
-    print(f"  ✓ Differentiable loss WORKS!")
+    print(f"  Differentiable loss works")
 else:
-    print(f"  ✗ Some gradients missing!")
+    print(f"  Some gradients missing")
 
 # 4. Test MAML Inner Loop
 print("\n4. Testing MAML Inner Loop...")
@@ -204,9 +204,9 @@ improvement = inner_losses[0] - inner_losses[-1]
 print(f"  Loss improvement: {improvement:.4f}")
 
 if improvement > 0:
-    print(f"  ✓ Inner loop adaptation WORKS!")
+    print(f"  Inner loop adaptation WORKS!")
 else:
-    print(f"  ⚠ No improvement (may need more iterations or tuning)")
+    print(f"  No improvement (may need more iterations or tuning)")
 
 # 5. Test Meta-Training Step
 print("\n5. Testing Meta-Training Step...")
@@ -220,9 +220,9 @@ print(f"  Mean task loss: {metrics['mean_task_loss']:.4f}")
 print(f"  Gradient norm: {metrics['grad_norm']:.4f}")
 
 if 'error' in metrics:
-    print(f"  ✗ Error: {metrics['error']}")
+    print(f"  Error: {metrics['error']}")
 else:
-    print(f"  ✓ Meta-training step WORKS!")
+    print(f"  Meta-training step WORKS!")
 
 print("\n" + "=" * 70)
 print("Test Complete!")
