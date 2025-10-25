@@ -5,8 +5,6 @@ This test verifies that gradients flow correctly through the entire
 meta-learning pipeline, from policy network through quantum simulation
 to fidelity computation.
 
-This is CRITICAL for the ICML paper - without working gradients,
-meta-learning cannot properly train.
 """
 
 import sys
@@ -16,10 +14,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import torch
 import numpy as np
 
-from src.quantum.lindblad_torch import DifferentiableLindbladSimulator, numpy_to_torch_complex
-from src.quantum.noise_models import NoiseParameters, NoisePSDModel, PSDToLindblad
-from src.meta_rl.policy import PulsePolicy
-from src.theory.quantum_environment import QuantumEnvironment
+from metaqctrl.src.quantum.lindblad_torch import DifferentiableLindbladSimulator, numpy_to_torch_complex
+from metaqctrl.src.quantum.noise_models import NoiseParameters, NoisePSDModel, PSDToLindblad
+from metaqctrl.src.meta_rl.policy import PulsePolicy
+from metaqctrl.src.theory.quantum_environment import QuantumEnvironment
 
 
 def test_basic_gradient_flow():
@@ -55,7 +53,7 @@ def test_basic_gradient_flow():
     loss.backward()
 
     # Check gradients
-    assert controls.grad is not None, "❌ No gradients!"
+    assert controls.grad is not None, " No gradients!"
     grad_norm = torch.norm(controls.grad).item()
 
     print(f"  ✓ Gradients computed: {controls.grad is not None}")
@@ -63,8 +61,8 @@ def test_basic_gradient_flow():
     print(f"  ✓ Gradient shape: {controls.grad.shape}")
     print(f"  ✓ Loss: {loss.item():.4f}")
 
-    assert grad_norm > 0, "❌ Zero gradient!"
-    print("\n✅ Test 1 PASSED: Basic gradient flow works!")
+    assert grad_norm > 0, " Zero gradient!"
+    print("\n Test 1 PASSED: Basic gradient flow works!")
 
     return True
 
@@ -103,7 +101,7 @@ def test_policy_to_simulation_gradient_flow():
 
     # Forward: Policy → Controls → Simulation
     controls = policy(task_features)
-    print(f"  ✓ Controls shape: {controls.shape}")
+    print(f"   Controls shape: {controls.shape}")
 
     rho0 = torch.tensor([[1, 0], [0, 0]], dtype=torch.complex64)
     rho_final = sim(rho0, controls, T=1.0)
@@ -122,8 +120,8 @@ def test_policy_to_simulation_gradient_flow():
     fidelity = torch.abs(overlap) ** 2
     loss = 1.0 - fidelity.real
 
-    print(f"  ✓ Fidelity: {fidelity.real.item():.4f}")
-    print(f"  ✓ Loss: {loss.item():.4f}")
+    print(f"   Fidelity: {fidelity.real.item():.4f}")
+    print(f"   Loss: {loss.item():.4f}")
 
     # Backward pass
     loss.backward()
@@ -136,12 +134,12 @@ def test_policy_to_simulation_gradient_flow():
             grad_norms.append(grad_norm)
             print(f"  ✓ {name}: grad_norm = {grad_norm:.4e}")
 
-    assert len(grad_norms) > 0, "❌ No policy gradients!"
-    assert all(g > 0 for g in grad_norms), "❌ Zero gradients in policy!"
+    assert len(grad_norms) > 0, " No policy gradients!"
+    assert all(g > 0 for g in grad_norms), " Zero gradients in policy!"
 
-    print(f"\n  ✓ Total parameters with gradients: {len(grad_norms)}")
-    print(f"  ✓ Average gradient norm: {np.mean(grad_norms):.4e}")
-    print("\n✅ Test 2 PASSED: Policy → Simulation gradients work!")
+    print(f"\n  Total parameters with gradients: {len(grad_norms)}")
+    print(f"   Average gradient norm: {np.mean(grad_norms):.4e}")
+    print("\n Test 2 PASSED: Policy → Simulation gradients work!")
 
     return True
 
@@ -185,7 +183,7 @@ def test_quantum_environment_differentiable():
         T=1.0
     )
 
-    print(f"  ✓ Environment created: d={env.d}, n_controls={env.n_controls}")
+    print(f"   Environment created: d={env.d}, n_controls={env.n_controls}")
 
     # Create policy
     policy = PulsePolicy(
@@ -201,8 +199,8 @@ def test_quantum_environment_differentiable():
     # OLD (NON-DIFFERENTIABLE) METHOD
     print("\n  Testing OLD non-differentiable method...")
     loss_old = env.compute_loss(policy, task_params, device=torch.device('cpu'))
-    print(f"  ✓ Old loss: {loss_old.item():.4f}")
-    print(f"  ✓ Old loss requires_grad: {loss_old.requires_grad}")
+    print(f"   Old loss: {loss_old.item():.4f}")
+    print(f"   Old loss requires_grad: {loss_old.requires_grad}")
     assert loss_old.requires_grad == False, "Old method should not have gradients"
 
     # NEW (DIFFERENTIABLE) METHOD
@@ -210,8 +208,8 @@ def test_quantum_environment_differentiable():
     loss_new = env.compute_loss_differentiable(
         policy, task_params, device=torch.device('cpu'), use_rk4=True
     )
-    print(f"  ✓ New loss: {loss_new.item():.4f}")
-    print(f"  ✓ New loss requires_grad: {loss_new.requires_grad}")
+    print(f"   New loss: {loss_new.item():.4f}")
+    print(f"   New loss requires_grad: {loss_new.requires_grad}")
 
     # Backward pass
     loss_new.backward()
@@ -220,18 +218,18 @@ def test_quantum_environment_differentiable():
     grad_count = sum(1 for p in policy.parameters() if p.grad is not None)
     total_params = sum(1 for _ in policy.parameters())
 
-    print(f"\n  ✓ Parameters with gradients: {grad_count}/{total_params}")
+    print(f"\n   Parameters with gradients: {grad_count}/{total_params}")
 
-    assert grad_count == total_params, f"❌ Only {grad_count}/{total_params} have gradients!"
+    assert grad_count == total_params, f" Only {grad_count}/{total_params} have gradients!"
 
     # Check gradient magnitudes
     grad_norms = [torch.norm(p.grad).item() for p in policy.parameters() if p.grad is not None]
     print(f"  ✓ Average gradient norm: {np.mean(grad_norms):.4e}")
     print(f"  ✓ Max gradient norm: {np.max(grad_norms):.4e}")
 
-    assert all(g > 0 for g in grad_norms), "❌ Zero gradients!"
+    assert all(g > 0 for g in grad_norms), " Zero gradients!"
 
-    print("\n✅ Test 3 PASSED: QuantumEnvironment differentiable loss works!")
+    print("\n Test 3 PASSED: QuantumEnvironment differentiable loss works!")
 
     return True
 
@@ -285,17 +283,17 @@ def test_simple_training_step():
         print(f"  Step {step}: Loss = {loss.item():.4f}")
 
     # Check that loss decreased
-    print(f"\n  ✓ Initial loss: {losses[0]:.4f}")
-    print(f"  ✓ Final loss: {losses[-1]:.4f}")
-    print(f"  ✓ Loss reduction: {losses[0] - losses[-1]:.4f}")
+    print(f"\n   Initial loss: {losses[0]:.4f}")
+    print(f"   Final loss: {losses[-1]:.4f}")
+    print(f"   Loss reduction: {losses[0] - losses[-1]:.4f}")
 
     # Loss should generally decrease (though not guaranteed in 5 steps)
     if losses[-1] < losses[0]:
         print("  ✓ Loss decreased - learning is happening!")
     else:
-        print("  ⚠️  Loss didn't decrease (may need more steps or better LR)")
+        print("   Loss didn't decrease (may need more steps or better LR)")
 
-    print("\n✅ Test 4 PASSED: Training step works!")
+    print("\n Test 4 PASSED: Training step works!")
 
     return True
 
@@ -320,7 +318,7 @@ def main():
             result = test_fn()
             results.append((name, result))
         except Exception as e:
-            print(f"\n❌ {name} FAILED with error:")
+            print(f"\n {name} FAILED with error:")
             print(f"   {type(e).__name__}: {e}")
             import traceback
             traceback.print_exc()
@@ -335,16 +333,16 @@ def main():
     total = len(results)
 
     for name, result in results:
-        status = "✅ PASSED" if result else "❌ FAILED"
+        status = " PASSED" if result else " FAILED"
         print(f"  {status}: {name}")
 
     print("\n" + "#"*70)
     if passed == total:
-        print(f"# ✅ ALL TESTS PASSED ({passed}/{total})")
-        print("# 🎉 GRADIENT FLOW IS WORKING!")
+        print(f"# ALL TESTS PASSED ({passed}/{total})")
+        print("# GRADIENT FLOW IS WORKING!")
         print("# Meta-learning can now properly train for ICML paper!")
     else:
-        print(f"# ⚠️ SOME TESTS FAILED ({passed}/{total} passed)")
+        print(f"#  SOME TESTS FAILED ({passed}/{total} passed)")
         print("# Fix failing tests before running experiments!")
     print("#"*70 + "\n")
 
