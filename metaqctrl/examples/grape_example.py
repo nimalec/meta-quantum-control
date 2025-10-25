@@ -13,10 +13,10 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
-from src.baselines.robust_control import GRAPEOptimizer
-from src.quantum.lindblad import LindbladSimulator
-from src.quantum.noise_models import NoiseParameters, NoisePSDModel, PSDToLindblad
-from src.quantum.gates import state_fidelity, TargetGates
+from metaqctrl.src.baselines.robust_control import GRAPEOptimizer
+from metaqctrl.src.quantum.lindblad import LindbladSimulator
+from metaqctrl.src.quantum.noise_models import NoiseParameters, NoisePSDModel, PSDToLindblad
+from metaqctrl.src.quantum.gates import state_fidelity, TargetGates
 
 
 def create_quantum_system():
