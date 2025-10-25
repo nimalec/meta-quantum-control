@@ -1,6 +1,6 @@
 # Paper Results Generation
 
-This directory contains scripts to generate all core results and figures for the ICML 2026 paper:
+This directory contains scripts to generate all core paper results and figures:
 
 **"Meta-Reinforcement Learning for Quantum Control: A Framework for Quantifying Adaptation Gains under Noise Shifts"**
 
