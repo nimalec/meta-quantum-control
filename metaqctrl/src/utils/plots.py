@@ -11,7 +11,7 @@ from typing import Optional, List
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from src.quantum.noise_models import (
+from metaqctrl.src.quantum.noise_models import (
     NoisePSDModel,
     TaskDistribution,
     psd_distance,
