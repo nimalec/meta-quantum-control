@@ -11,7 +11,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
     requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
 
 setup(
-    name="meta_quantum_control",
+    name="metaqctrl",
     version="1.0.0",
     author="Nima Leclerc",
     author_email="nleclerc@mitre.org",
