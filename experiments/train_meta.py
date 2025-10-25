@@ -109,28 +109,28 @@ def data_generator(
 
 
 def create_loss_function(env, device):
-    #Make a loss function . 
+    #Make a loss function .
     """Create loss function using QuantumEnvironment."""
-    
+
     def loss_fn(policy: torch.nn.Module, data: dict):
-        ## define a loss function 
+        ## define a loss function
         """
         Loss = 1 - Fidelity(ρ_final, ρ_target)
-        
+
         Args:
             policy: Policy network
             data: Dictionary with task_features and task_params
-            
+
         Returns:
             loss: Scalar tensor
         """
         task_params = data['task_params']
-        
-        # Use environment to compute loss
-        loss = env.compute_loss(policy, task_params, device)
-        
+
+        # compute differentiable loss
+        loss = env.compute_loss_differentiable(policy, task_params, device)
+
         return loss
-    
+
     return loss_fn
 
 

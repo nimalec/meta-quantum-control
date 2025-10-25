@@ -262,43 +262,45 @@ class MAML:
     ) -> Dict[str, float]:
         """
         Evaluate meta-learned initialization on validation tasks.
-        
+
         Args:
             val_tasks: Validation task batch
             loss_fn: Loss function
-            
+
         Returns:
             metrics: Validation metrics
         """
         self.policy.eval()
-        
+
         val_losses = []
         adapted_losses = []
-        
-        with torch.no_grad():
-            for task_data in val_tasks:
-                # Loss before adaptation
+
+        for task_data in val_tasks:
+            # Loss before adaptation (no gradients needed)
+            with torch.no_grad():
                 pre_loss = loss_fn(self.policy, task_data['query'])
                 val_losses.append(pre_loss.item())
-                
-                # Adapt on support set
-                adapted_policy, _ = self.inner_loop(task_data, loss_fn)
-                
-                # Loss after adaptation
+
+            # Adapt on support set (gradients needed for inner loop)
+            # Note: inner_loop uses a deepcopy, so meta-parameters won't be affected
+            adapted_policy, _ = self.inner_loop(task_data, loss_fn)
+
+            # Loss after adaptation (no gradients needed)
+            with torch.no_grad():
                 post_loss = loss_fn(adapted_policy, task_data['query'])
                 adapted_losses.append(post_loss.item())
-        
+
         self.policy.train()
-        
+
         metrics = {
             'val_loss_pre_adapt': np.mean(val_losses),
             'val_loss_post_adapt': np.mean(adapted_losses),
             'adaptation_gain': np.mean(val_losses) - np.mean(adapted_losses),
             'std_post_adapt': np.std(adapted_losses)
         }
-        
+
         self.meta_val_losses.append(metrics['val_loss_post_adapt'])
-        
+
         return metrics
     
     def save_checkpoint(self, path: str, epoch: int, **kwargs):
