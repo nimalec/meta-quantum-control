@@ -9,20 +9,20 @@ import torch
 
 def test_imports():
     """Test that all modules can be imported."""
-    from src.quantum.lindblad import LindbladSimulator
-    from src.quantum.noise_models import NoisePSDModel, TaskDistribution
-    from src.quantum.gates import GateFidelityComputer, TargetGates
-    from src.meta_rl.policy import PulsePolicy
-    from src.meta_rl.maml import MAML
-    from src.baselines.robust_control import RobustPolicy
-    from src.theory.optimality_gap import OptimalityGapComputer, GapConstants
+    from metaqctrl.src.quantum.lindblad import LindbladSimulator
+    from metaqctrl.src.quantum.noise_models import NoisePSDModel, TaskDistribution
+    from metaqctrl.src.quantum.gates import GateFidelityComputer, TargetGates
+    from metaqctrl.src.meta_rl.policy import PulsePolicy
+    from metaqctrl.src.meta_rl.maml import MAML
+    from metaqctrl.src.baselines.robust_control import RobustPolicy
+    from metaqctrl.src.theory.optimality_gap import OptimalityGapComputer, GapConstants
     
     assert True, "All imports successful"
 
 
 def test_lindblad_simulator():
     """Test basic Lindblad simulation."""
-    from src.quantum.lindblad import LindbladSimulator
+    from metaqctrl.src.quantum.lindblad import LindbladSimulator
     
     # Pauli matrices
     sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
@@ -53,7 +53,7 @@ def test_lindblad_simulator():
 
 def test_noise_psd():
     """Test PSD model."""
-    from src.quantum.noise_models import NoisePSDModel, NoiseParameters
+    from metaqctrl.src.quantum.noise_models import NoisePSDModel, NoiseParameters
     
     psd_model = NoisePSDModel(model_type='one_over_f')
     
@@ -69,7 +69,7 @@ def test_noise_psd():
 
 def test_task_distribution():
     """Test task sampling."""
-    from src.quantum.noise_models import TaskDistribution
+    from metaqctrl.src.quantum.noise_models import TaskDistribution
     
     task_dist = TaskDistribution(
         dist_type='uniform',
@@ -93,7 +93,7 @@ def test_task_distribution():
 
 def test_fidelity_computation():
     """Test fidelity measures."""
-    from src.quantum.gates import state_fidelity, TargetGates
+    from metaqctrl.src.quantum.gates import state_fidelity, TargetGates
     
     # Test with pure states
     ket_0 = np.array([1, 0], dtype=complex)
@@ -116,7 +116,7 @@ def test_fidelity_computation():
 
 def test_policy_network():
     """Test policy network forward pass."""
-    from src.meta_rl.policy import PulsePolicy
+    from metaqctrl.src.meta_rl.policy import PulsePolicy
     
     policy = PulsePolicy(
         task_feature_dim=3,
@@ -142,8 +142,8 @@ def test_policy_network():
 
 def test_maml_initialization():
     """Test MAML can be initialized."""
-    from src.meta_rl.policy import PulsePolicy
-    from src.meta_rl.maml import MAML
+    from metaqctrl.src.meta_rl.policy import PulsePolicy
+    from metaqctrl.src.meta_rl.maml import MAML
     
     policy = PulsePolicy(
         task_feature_dim=3,
@@ -190,10 +190,10 @@ def test_gap_constants():
 
 def test_end_to_end_mini():
     """Minimal end-to-end test."""
-    from src.quantum.lindblad import LindbladSimulator
-    from src.quantum.noise_models import NoiseParameters, NoisePSDModel, PSDToLindblad
-    from src.quantum.gates import state_fidelity
-    from src.meta_rl.policy import PulsePolicy
+    from metaqctrl.src.quantum.lindblad import LindbladSimulator
+    from metaqctrl.src.quantum.noise_models import NoiseParameters, NoisePSDModel, PSDToLindblad
+    from metaqctrl.src.quantum.gates import state_fidelity
+    from metaqctrl.src.meta_rl.policy import PulsePolicy
     
     # Setup system
     sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
@@ -250,42 +250,42 @@ if __name__ == "__main__":
     
     print("1. Testing imports...")
     test_imports()
-    print("   ✓ Passed\n")
+    print("   Passed\n")
     
     print("2. Testing Lindblad simulator...")
     test_lindblad_simulator()
-    print("   ✓ Passed\n")
+    print("   Passed\n")
     
     print("3. Testing noise PSD...")
     test_noise_psd()
-    print("   ✓ Passed\n")
+    print("   Passed\n")
     
     print("4. Testing task distribution...")
     test_task_distribution()
-    print("   ✓ Passed\n")
+    print("   Passed\n")
     
     print("5. Testing fidelity computation...")
     test_fidelity_computation()
-    print("   ✓ Passed\n")
+    print("   Passed\n")
     
     print("6. Testing policy network...")
     test_policy_network()
-    print("   ✓ Passed\n")
+    print("   Passed\n")
     
     print("7. Testing MAML initialization...")
     test_maml_initialization()
-    print("   ✓ Passed\n")
+    print("   Passed\n")
     
     print("8. Testing gap constants...")
     test_gap_constants()
-    print("   ✓ Passed\n")
+    print("   Passed\n")
     
     print("9. Running end-to-end test...")
     test_end_to_end_mini()
-    print("   ✓ Passed\n")
+    print("   Passed\n")
     
     print("=" * 50)
-    print("All tests passed! ✓")
+    print("All tests passed! ")
     print("=" * 50)
     print("\nInstallation verified successfully.")
     print("\nNext steps:")
