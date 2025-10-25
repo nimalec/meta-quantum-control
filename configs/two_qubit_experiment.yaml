@@ -1,0 +1,103 @@
+# Two-Qubit CNOT Gate Optimization Configuration
+# Full MAML training for 2-qubit system
+
+# System Configuration
+system:
+  num_qubits: 2
+  dimension: 4  # d = 2^num_qubits
+  target_gate: "cnot"
+  initial_state: "00"
+  evolution_time: 1.5
+  dt: 0.01  # Time step for integration
+
+# Control Configuration
+control:
+  num_controls: 4  # XI, IX, YI, ZZ
+  num_segments: 30
+  control_bounds: [-1.0, 1.0]
+
+# Noise Configuration (PSD-parameterized)
+noise:
+  frequencies: [1.0, 5.0, 10.0]  # ω_j for filter weights
+  num_lindblad_operators: 4  # Dephasing + relaxation on both qubits
+
+# Task Distribution
+task_distribution:
+  alpha_range: [0.5, 2.0]    # Spectral exponent
+  A_range: [0.05, 0.3]        # Amplitude
+  omega_c_range: [2.0, 8.0]   # Cutoff frequency rad/s
+
+# Policy Network
+policy:
+  input_dim: 3  # (alpha, A, omega_c)
+  output_dim: 120  # num_segments * num_controls = 30 * 4
+  hidden_dims: [256, 256, 256]
+  activation: "tanh"
+  output_scaling: 1.0
+  initialization: "xavier"
+
+# MAML Configuration
+maml:
+  # Inner loop (task adaptation)
+  inner_steps: 5
+  inner_lr: 0.01
+  inner_batch_size: 10  # Trajectories per task for adaptation
+
+  # Outer loop (meta-optimization)
+  outer_lr: 0.0005  # Slightly lower for 2-qubit stability
+  outer_optimizer: "adam"
+  outer_batch_size: 4  # Tasks per meta-iteration
+
+  # Training
+  num_iterations: 3000
+  warmup_iterations: 100
+
+  # Validation
+  val_interval: 100
+  val_tasks: 20
+
+  # Algorithm variant
+  first_order: false  # Use full second-order MAML
+
+# Robust Baseline Configuration
+robust:
+  optimizer: "adam"
+  learning_rate: 0.0005
+  num_iterations: 3000
+  batch_size: 16
+  criterion: "minimax"  # Options: average, minimax, cvar
+  tau: 10.0  # Temperature for smooth minimax
+
+# Training Configuration
+training:
+  device: "cpu"  # or "cuda" if available
+  num_workers: 4
+  seed: 42
+
+  # Checkpointing
+  save_interval: 200
+  checkpoint_dir: "checkpoints/two_qubit"
+
+  # Logging
+  log_interval: 50
+  log_dir: "logs/two_qubit"
+  use_wandb: false  # Set to true if using Weights & Biases
+
+# Evaluation Configuration
+evaluation:
+  num_test_tasks: 100
+  k_values: [1, 2, 3, 5, 7, 10, 15, 20, 25, 30]
+  variance_levels: [0.001, 0.002, 0.004, 0.008, 0.016]
+
+# Output Configuration
+output:
+  results_dir: "results/two_qubit"
+  figures_dir: "results/two_qubit/figures"
+  save_trajectories: false  # Set true to save full evolution trajectories
+
+# Theoretical Parameters (for comparison)
+theory:
+  # Expected scaling from 1-qubit
+  d_squared_ratio: 4.0  # (4/2)^2 = 4
+  expected_mu_ratio: 0.25  # 1/d_squared_ratio
+  expected_Delta_ratio: 0.8  # Slightly smaller for larger system
