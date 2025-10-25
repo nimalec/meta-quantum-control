@@ -473,7 +473,7 @@ class MAMLTrainer:
 
 # Example usage
 if __name__ == "__main__":
-    from src.meta_rl.policy import PulsePolicy
+    from metaqctrl.src.meta_rl.policy import PulsePolicy
     
     # Create policy
     policy = PulsePolicy(
