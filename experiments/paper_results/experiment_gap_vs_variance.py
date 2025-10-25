@@ -4,7 +4,6 @@ Experiment: Optimality Gap vs Task Variance σ²_S
 This script generates Figure 2 (Gap vs Variance) from the paper, validating:
     Gap(P, K) ∝ σ²_S
 
-Expected result: R² ≈ 0.94 for linear fit
 """
 
 import os
