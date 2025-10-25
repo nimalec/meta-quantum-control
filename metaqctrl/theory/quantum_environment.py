@@ -287,7 +287,7 @@ class QuantumEnvironment:
             H0=H0_torch,
             H_controls=H_controls_torch,
             L_operators=L_ops_torch,
-            dt=0.005,  # FIXED: Reduced to 0.005 for better stability and accuracy
+            dt=0.001,  # FIXED: Reduced to 0.001 for much better stability and accuracy
             method='rk4' if use_rk4 else 'euler',
             device=device
         )
@@ -319,8 +319,8 @@ class QuantumEnvironment:
 
         F(ρ, σ) = [tr(√(√ρ σ √ρ))]²
 
-        This implementation uses eigenvalue-only computation to avoid the
-        eigenvector phase ambiguity issue in complex autodiff.
+        This implementation properly computes the Uhlmann fidelity using
+        eigenvalue decomposition with numerically stable operations.
 
         Args:
             rho: Density matrix (d x d) complex tensor
@@ -329,61 +329,31 @@ class QuantumEnvironment:
         Returns:
             fidelity: Real-valued fidelity in [0, 1]
         """
-        # FIXED: Use eigenvalues-only approach to avoid eigenvector phase issues
-        # For Hermitian positive semidefinite matrices, we can use:
-        # F = [tr(√(√ρ σ √ρ))]² = [sum_i √λ_i(√ρ σ √ρ)]²
+        # Proper implementation of F(ρ,σ) = [Tr(√(√ρ σ √ρ))]²
 
-        # For small dimension (d=2), we can use direct matrix sqrt via eigenvalues only
-        # Alternative: Use iterative sqrt or approximations
+        # Step 1: Compute √ρ using eigendecomposition
+        # For Hermitian matrices: ρ = U Λ U†, so √ρ = U √Λ U†
+        eigvals_rho, eigvecs_rho = torch.linalg.eigh(rho)
+        eigvals_rho = torch.clamp(eigvals_rho.real, min=1e-10)  # Ensure positive, avoid sqrt(0)
 
-        # Method: Compute eigenvalues of ρσ (simpler, avoids double sqrt)
-        # For positive matrices: F ≈ tr(ρσ) works well as surrogate for optimization
-        # But we need the correct formula for proper loss
+        # Compute √ρ = U √Λ U†
+        sqrt_eigvals_rho = torch.sqrt(eigvals_rho)
+        sqrt_rho = eigvecs_rho @ torch.diag(sqrt_eigvals_rho.to(eigvecs_rho.dtype)) @ eigvecs_rho.conj().T
 
-        # WORKAROUND: Use eigenvalue computation without eigenvectors
-        # Compute eigenvalues of ρσ
-        M = rho @ sigma
+        # Step 2: Compute M = √ρ σ √ρ
+        M = sqrt_rho @ sigma @ sqrt_rho
 
-        # For correct fidelity, we need eigenvalues of √ρ σ √ρ
-        # But this requires eigenvectors which cause issues
-        #
-        # ALTERNATIVE: For 2x2 matrices, use closed-form formula
-        d = rho.shape[0]
+        # Step 3: Compute eigenvalues of M
+        # Since M is Hermitian positive semidefinite, eigenvalues are real and non-negative
+        eigvals_M = torch.linalg.eigvalsh(M)
+        eigvals_M = torch.clamp(eigvals_M.real, min=0.0)
 
-        if d == 2:
-            # Closed-form fidelity for 2x2 density matrices
-            # F = tr(ρ)tr(σ) + 2√det(ρ)√det(σ) - tr(ρσ + σρ) + 2|tr(√ρ√σ)|
-            # Simplified for computational efficiency:
+        # Step 4: F = [Σᵢ √λᵢ(M)]²
+        sqrt_sum = torch.sum(torch.sqrt(eigvals_M))
+        fidelity = sqrt_sum ** 2
 
-            # Compute traces and determinants (real quantities for density matrices)
-            tr_rho = torch.trace(rho).real
-            tr_sigma = torch.trace(sigma).real
-            tr_rho_sigma = torch.trace(rho @ sigma).real
-
-            det_rho = torch.linalg.det(rho).real
-            det_sigma = torch.linalg.det(sigma).real
-
-            # Fidelity formula (Uhlmann fidelity)
-            # F = tr(ρ) tr(σ) + 2√det(ρ)det(σ) - 2Re[tr(ρσ)]
-            # Simplified: F = (√λ1ρ √λ1σ + √λ2ρ √λ2σ)²
-
-            # For density matrices: tr=1, so simplified formula
-            sqrt_det_rho = torch.sqrt(torch.clamp(det_rho, min=0.0))
-            sqrt_det_sigma = torch.sqrt(torch.clamp(det_sigma, min=0.0))
-
-            # Correct formula: F = tr(ρσ) + 2√det(ρ)√det(σ)
-            # Actually for fidelity: F = (√λ+ + √λ-)² where λ± are eigenvalues of √ρ σ √ρ
-
-            # Most robust: Use Bures metric
-            fidelity = tr_rho_sigma + 2.0 * sqrt_det_rho * sqrt_det_sigma
-            fidelity = torch.clamp(fidelity, 0.0, 1.0)
-
-        else:
-            # Fallback: For larger dimensions, use approximation
-            # This is a valid lower bound: F ≥ |tr(ρσ)|
-            overlap = torch.trace(rho @ sigma).real
-            fidelity = overlap  # Conservative estimate
-            fidelity = torch.clamp(fidelity, 0.0, 1.0)
+        # Clamp to valid range [0, 1]
+        fidelity = torch.clamp(fidelity, 0.0, 1.0)
 
         return fidelity
 

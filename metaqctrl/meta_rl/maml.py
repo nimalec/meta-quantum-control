@@ -71,6 +71,9 @@ class MAML:
         # Logging
         self.meta_train_losses = []
         self.meta_val_losses = []
+
+        # Warning flag for missing higher library
+        self._warned_no_higher = False
     
     def inner_loop(
         self,
@@ -198,18 +201,32 @@ class MAML:
                     query_loss = loss_fn(fmodel, task_data['query'])
 
             else:
-                # First-order MAML or manual implementation
-                adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
+                # FIXED: Always use higher library for proper gradient flow
+                # Fall back to higher-based implementation even for first-order
+                if HIGHER_AVAILABLE:
+                    fmodel, inner_losses = self.inner_loop_higher(task_data, loss_fn)
+                    query_loss = loss_fn(fmodel, task_data['query'])
+                else:
+                    # Manual first-order MAML (only if higher not available)
+                    adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
 
-                # Evaluate on query set
-                query_loss = loss_fn(adapted_policy, task_data['query'])
+                    # Evaluate on query set
+                    query_loss = loss_fn(adapted_policy, task_data['query'])
+
+                    # WARNING: This won't update correctly without higher library!
+                    # Recommend installing: pip install higher
+                    if self.first_order and hasattr(self, '_warned_no_higher'):
+                        if not self._warned_no_higher:
+                            print("WARNING: First-order MAML without 'higher' library may not train correctly!")
+                            print("Install with: pip install higher")
+                            self._warned_no_higher = True
 
             # NEW: Check for NaN/Inf
             if torch.isnan(query_loss) or torch.isinf(query_loss):
                 print(f"WARNING: Invalid loss detected (NaN or Inf): {query_loss.item()}")
                 print(f"  Inner losses: {inner_losses}")
                 # Skip this task or use fallback value
-                query_loss = torch.tensor(1.0, device=self.device)
+                query_loss = torch.tensor(1.0, device=self.device, requires_grad=True)
 
             meta_loss += query_loss
             task_losses.append(query_loss.item())
@@ -455,6 +472,17 @@ class MAMLTrainer:
                       f"{train_metrics['std_task_loss']:.4f} | "
                       f"Range: [{train_metrics['min_task_loss']:.4f}, {train_metrics['max_task_loss']:.4f}] | "
                       f"Grad Norm: {grad_norm:.4f}")
+
+                # DIAGNOSTIC: Check if any parameter has zero gradient
+                if iteration % (self.log_interval * 5) == 0:  # Every 5th log interval
+                    zero_grad_count = 0
+                    total_params = 0
+                    for name, param in self.maml.policy.named_parameters():
+                        total_params += 1
+                        if param.grad is None or param.grad.abs().max() < 1e-10:
+                            zero_grad_count += 1
+                    if zero_grad_count > 0:
+                        print(f"  [DIAGNOSTIC] {zero_grad_count}/{total_params} parameters have zero/no gradients")
             
             # Validation
             if iteration % self.val_interval == 0 and iteration > 0:
