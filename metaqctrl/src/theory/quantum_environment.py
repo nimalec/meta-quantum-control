@@ -9,10 +9,10 @@ import numpy as np
 import torch
 from typing import Dict, Tuple, Optional
 from functools import lru_cache
-from src.quantum.lindblad import LindbladSimulator
-from src.quantum.lindblad_torch import DifferentiableLindbladSimulator, numpy_to_torch_complex
-from src.quantum.noise_models import NoiseParameters
-from src.quantum.gates import state_fidelity
+from metaqctrl.src.quantum.lindblad import LindbladSimulator
+from metaqctrl.src.quantum.lindblad_torch import DifferentiableLindbladSimulator, numpy_to_torch_complex
+from metaqctrl.src.quantum.noise_models import NoiseParameters
+from metaqctrl.src.quantum.gates import state_fidelity
 
 
 class QuantumEnvironment:
@@ -371,7 +371,7 @@ class BatchedQuantumEnvironment(QuantumEnvironment):
         
         if use_jax:
             try:
-                from src.quantum.lindblad import LindbladJAX
+                from metaqctrl.src.quantum.lindblad import LindbladJAX
                 self.jax_sim = LindbladJAX(
                     self.H0,
                     self.H_controls,
@@ -424,7 +424,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray) -> Quantu
     Returns:
         env: QuantumEnvironment instance
     """
-    from src.quantum.noise_models import NoisePSDModel, PSDToLindblad
+    from metaqctrl.src.quantum.noise_models import NoisePSDModel, PSDToLindblad
     
     # Pauli matrices for 1-qubit
     sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
