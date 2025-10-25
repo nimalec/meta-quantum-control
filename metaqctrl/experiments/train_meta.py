@@ -15,13 +15,13 @@ from pathlib import Path
 from datetime import datetime
 import argparse
 
-from src.quantum.lindblad import LindbladSimulator
-from src.quantum.noise_models import (
+from metaqctrl.src.quantum.lindblad import LindbladSimulator
+from metaqctrl.src.quantum.noise_models import (
     TaskDistribution, NoisePSDModel, PSDToLindblad, NoiseParameters
 )
-from src.quantum.gates import GateFidelityComputer, TargetGates
-from src.meta_rl.policy import PulsePolicy
-from src.meta_rl.maml import MAML, MAMLTrainer
+from metaqctrl.src.quantum.gates import GateFidelityComputer, TargetGates
+from metaqctrl.src.meta_rl.policy import PulsePolicy
+from metaqctrl.src.meta_rl.maml import MAML, MAMLTrainer
 
 
 def create_quantum_system(config: dict):
