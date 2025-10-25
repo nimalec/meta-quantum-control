@@ -11,11 +11,11 @@ sys.path.append(os.path.dirname(__file__))
 
 import numpy as np
 import torch
-from src.theory.quantum_environment import create_quantum_environment
-from src.quantum.noise_models import TaskDistribution, NoiseParameters
-from src.quantum.gates import TargetGates
-from src.meta_rl.policy import PulsePolicy
-from src.theory.physics_constants import (
+from metaqctrl.src.theory.quantum_environment import create_quantum_environment
+from metaqctrl.src.quantum.noise_models import TaskDistribution, NoiseParameters
+from metaqctrl.src.quantum.gates import TargetGates
+from metaqctrl.src.meta_rl.policy import PulsePolicy
+from metaqctrl.src.theory.physics_constants import (
     compute_spectral_gap,
     estimate_filter_constant,
     compute_control_relevant_variance,
