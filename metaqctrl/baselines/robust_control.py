@@ -627,8 +627,8 @@ class GRAPEOptimizer:
                 # Evaluate fidelity
                 f_plus = simulate_fn(controls_plus, task_params)
 
-                # Finite difference
-                gradient[i, j] = (f_plus - f0) / epsilon
+                # Finite difference: gradient of loss = -gradient of fidelity
+                gradient[i, j] = -(f_plus - f0) / epsilon
 
         return gradient
 
