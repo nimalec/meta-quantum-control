@@ -181,6 +181,37 @@ def estimate_filter_constant(env) -> float:
     return C_filter
 
 
+def estimate_pl_constant(env, task_params, num_samples: int = 5) -> float:
+    """
+    Estimate PL constant μ for a task using random control perturbations.
+
+    Uses the theoretical formula: μ ≈ Δ / (d² M² T)
+    where Δ is the spectral gap, d is the dimension, M is control strength, T is time.
+
+    Args:
+        env: QuantumEnvironment
+        task_params: Task parameters (NoiseParameters)
+        num_samples: Number of random samples for estimation
+
+    Returns:
+        mu: Estimated PL constant
+    """
+    # Compute spectral gap
+    Delta = compute_spectral_gap(env, task_params)
+
+    # System parameters
+    d = env.d
+    T = env.T
+
+    # Estimate control strength M
+    M = np.max([np.linalg.norm(H) for H in env.H_controls])
+
+    # Theoretical PL constant (this is a heuristic approximation)
+    mu = Delta / (d**2 * M**2 * T)
+
+    return mu
+
+
 def estimate_PL_constant_from_convergence(
     env,
     policy: torch.nn.Module,
@@ -311,22 +342,93 @@ def estimate_PL_constant_from_convergence(
 
 
 def compute_control_relevant_variance(
+    tasks_or_env,
+    omega_control_or_tasks = None,
+    control_susceptibility = None
+) -> float:
+    """
+    Compute control-relevant variance σ²_S.
+
+    σ²_S = Var[∫_{Ω_control} S(ω; θ) χ(ω) dω]
+
+    Supports two call signatures for backward compatibility:
+    1. compute_control_relevant_variance(env, tasks, omega_control_band=None)
+    2. compute_control_relevant_variance(tasks, omega_control, control_susceptibility)
+
+    Args:
+        tasks_or_env: Either QuantumEnvironment or list of NoiseParameters
+        omega_control_or_tasks: Either list of tasks or omega control frequencies
+        control_susceptibility: Control susceptibility matrix (optional)
+
+    Returns:
+        sigma2_S: Control-relevant variance (float)
+    """
+    # Detect call signature
+    if hasattr(tasks_or_env, 'psd_to_lindblad'):
+        # New signature: (env, tasks, omega_control_band)
+        env = tasks_or_env
+        tasks = omega_control_or_tasks
+        omega_control_band = control_susceptibility
+        return _compute_control_relevant_variance_with_env(env, tasks, omega_control_band)
+    else:
+        # Old signature: (tasks, omega_control, control_susceptibility)
+        tasks = tasks_or_env
+        omega_control = omega_control_or_tasks
+        return _compute_control_relevant_variance_simple(tasks, omega_control, control_susceptibility)
+
+
+def _compute_control_relevant_variance_simple(
+    tasks: List,
+    omega_control: np.ndarray,
+    control_susceptibility: np.ndarray
+) -> float:
+    """
+    Simple variance computation for backward compatibility.
+
+    Args:
+        tasks: List of NoiseParameters
+        omega_control: Control frequency array
+        control_susceptibility: Susceptibility matrix
+
+    Returns:
+        sigma2_S: Variance
+    """
+    from metaqctrl.quantum.noise_models import NoisePSDModel
+
+    psd_model = NoisePSDModel(model_type='one_over_f')
+
+    # Compute noise power for each task
+    noise_powers = []
+    for task in tasks:
+        # Simple average over omega_control band
+        omega_grid = np.linspace(0, np.max(omega_control), 50)
+        S_omega = psd_model.psd(omega_grid, task)
+        N_control = np.mean(S_omega)  # Simplified integration
+        noise_powers.append(N_control)
+
+    noise_powers = np.array(noise_powers)
+    sigma2_S = np.var(noise_powers)
+
+    return sigma2_S
+
+
+def _compute_control_relevant_variance_with_env(
     env,
     tasks: List,
     omega_control_band: tuple = None
-) -> Dict:
-    """ Worth checking, but looks good. 
-    Compute control-relevant variance σ²_S.
-    
+) -> float:
+    """ Worth checking, but looks good.
+    Compute control-relevant variance σ²_S with full environment context.
+
     σ²_S = Var[∫_{Ω_control} S(ω; θ) χ(ω) dω]
-    
+
     Args:
         env: QuantumEnvironment
         tasks: List of NoiseParameters
         omega_control_band: (omega_min, omega_max) or None for auto
-        
+
     Returns:
-        results: Dictionary with variance and components
+        sigma2_S: Control-relevant variance
     """
     # Determine control bandwidth
     if omega_control_band is None:
@@ -368,41 +470,54 @@ def compute_control_relevant_variance(
     
     noise_powers_out = np.array(noise_powers_out)
     sigma_out_sq = np.var(noise_powers_out)
-    
-    return {
-        'sigma_S_sq': sigma_S_sq,
-        'sigma_out_sq': sigma_out_sq,
-        'ratio_in_to_out': sigma_S_sq / (sigma_out_sq + 1e-10),
-        'control_bandwidth': omega_control_band,
-        'noise_powers_in_band': noise_powers,
-        'noise_powers_out_band': noise_powers_out,
-        'mean_power_in_band': np.mean(noise_powers),
-        'mean_power_out_band': np.mean(noise_powers_out)
-    }
+
+    # Return just the variance for backward compatibility
+    return sigma_S_sq
 
 
 def estimate_all_constants(
     env,
-    policy: torch.nn.Module,
-    tasks: List,
+    policy_or_task_dist = None,
+    tasks_or_n_tasks = None,
     device: torch.device = torch.device('cpu'),
     n_samples_gap: int = 10,
-    n_samples_mu: int = 3
+    n_samples_mu: int = 3,
+    task_distribution = None,
+    n_tasks: int = None
 ) -> Dict:
-    """ Good. 
+    """
     Estimate all theoretical constants.
-    
+
+    Supports two call signatures for backward compatibility:
+    1. estimate_all_constants(env, policy, tasks, device, ...)
+    2. estimate_all_constants(env, task_distribution=dist, n_tasks=N)
+
     Args:
         env: QuantumEnvironment
-        policy: Policy network
-        tasks: List of tasks
+        policy_or_task_dist: Policy network or task distribution
+        tasks_or_n_tasks: List of tasks or number of tasks
         device: torch device
         n_samples_gap: Number of tasks for gap estimation
         n_samples_mu: Number of tasks for μ estimation
-        
+        task_distribution: TaskDistribution (for backward compat)
+        n_tasks: Number of tasks to sample (for backward compat)
+
     Returns:
         constants: Dictionary with all estimated constants
     """
+    # Handle backward compatibility signatures
+    if task_distribution is not None and n_tasks is not None:
+        # Old signature: estimate_all_constants(env, task_distribution=dist, n_tasks=N)
+        tasks = task_distribution.sample(n_tasks)
+        policy = None
+    elif policy_or_task_dist is not None and hasattr(policy_or_task_dist, 'sample'):
+        # task_distribution passed as first arg
+        tasks = policy_or_task_dist.sample(tasks_or_n_tasks if tasks_or_n_tasks else 50)
+        policy = None
+    else:
+        # New signature: estimate_all_constants(env, policy, tasks, ...)
+        policy = policy_or_task_dist
+        tasks = tasks_or_n_tasks if tasks_or_n_tasks is not None else []
     print("="*60)
     print("ESTIMATING ALL THEORETICAL CONSTANTS")
     print("="*60)
@@ -423,21 +538,28 @@ def estimate_all_constants(
     # 3. PL constant μ
     print("\n3. PL Constant μ...")
     mu_results = []
-    for task in tasks[:n_samples_mu]:
-        result = estimate_PL_constant_from_convergence(env, policy, task, device=device)
-        mu_results.append(result)
-        print(f"   Task: μ = {result['mu']:.6f}, R² = {result['r_squared']:.3f}")
-    
-    mu_mean = np.mean([r['mu'] for r in mu_results])
+    if policy is not None:
+        # Use convergence-based estimation with policy
+        for task in tasks[:n_samples_mu]:
+            result = estimate_PL_constant_from_convergence(env, policy, task, device=device)
+            mu_results.append(result['mu'])
+            print(f"   Task: μ = {result['mu']:.6f}, R² = {result['r_squared']:.3f}")
+    else:
+        # Use theoretical formula
+        for task in tasks[:n_samples_mu]:
+            mu = estimate_pl_constant(env, task)
+            mu_results.append(mu)
+            print(f"   Task: μ = {mu:.6f}")
+
+    mu_mean = np.mean(mu_results)
+    mu_min = np.min(mu_results)
     print(f"   μ_mean = {mu_mean:.6f}")
-    
+    print(f"   μ_min = {mu_min:.6f}")
+
     # 4. Control-relevant variance
     print("\n4. Control-Relevant Variance σ²_S...")
-    var_results = compute_control_relevant_variance(env, tasks)
-    sigma_S_sq = var_results['sigma_S_sq']
+    sigma_S_sq = compute_control_relevant_variance(env, tasks)
     print(f"   σ²_S = {sigma_S_sq:.8f}")
-    print(f"   σ²_out = {var_results['sigma_out_sq']:.8f}")
-    print(f"   Ratio (in/out) = {var_results['ratio_in_to_out']:.3f}")
     
     # 5. System parameters
     M = max(np.linalg.norm(H, ord=2) for H in env.H_controls)
@@ -458,20 +580,21 @@ def estimate_all_constants(
     print(f"   Ratio μ_emp/μ_theory = {mu_mean/mu_theory:.3f}")
     
     print("\n" + "="*60)
-    
+
     return {
         'Delta_min': Delta_min,
         'Delta_mean': gap_stats['Delta_mean'],
         'Delta_std': gap_stats['Delta_std'],
         'C_filter': C_filter,
+        'mu_min': mu_min,
+        'mu_mean': mu_mean,
         'mu_empirical': mu_mean,
         'mu_theory': mu_theory,
         'mu_results': mu_results,
+        'sigma2_S': sigma_S_sq,  # Backward compat key
         'sigma_S_sq': sigma_S_sq,
-        'sigma_out_sq': var_results['sigma_out_sq'],
         'M': M,
         'T': T,
         'c_quantum': c_quantum,
-        'gap_stats': gap_stats,
-        'var_results': var_results
+        'gap_stats': gap_stats
     }

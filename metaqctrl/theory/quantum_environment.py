@@ -65,7 +65,34 @@ class QuantumEnvironment:
         self.rho0[0, 0] = 1.0
         
         print(f"QuantumEnvironment initialized: d={self.d}, n_controls={self.n_controls}, T={T}")
-    
+
+    # API compatibility properties
+    @property
+    def num_controls(self) -> int:
+        """Alias for n_controls for backward compatibility."""
+        return self.n_controls
+
+    @property
+    def evolution_time(self) -> float:
+        """Alias for T for backward compatibility."""
+        return self.T
+
+    @property
+    def omega_control(self) -> np.ndarray:
+        """Control frequencies - placeholder for compatibility."""
+        # Return typical control frequencies based on system
+        return np.array([1.0, 5.0, 10.0])
+
+    @property
+    def control_susceptibility(self) -> np.ndarray:
+        """Control susceptibility matrix - placeholder for compatibility."""
+        # Return identity-like matrix as placeholder
+        return np.eye(len(self.H_controls))
+
+    def compute_fidelity(self, controls: np.ndarray, task_params: NoiseParameters) -> float:
+        """Alias for evaluate_controls for backward compatibility."""
+        return self.evaluate_controls(controls, task_params, return_trajectory=False)
+
     def _task_hash(self, task_params: NoiseParameters) -> tuple:
         """Create hashable key for task."""
         return (
@@ -420,19 +447,65 @@ class BatchedQuantumEnvironment(QuantumEnvironment):
         return np.array(fidelities)
 
 
+# Helper functions
+def get_target_state_from_config(config: dict) -> np.ndarray:
+    """
+    Get target density matrix from config.
+
+    Args:
+        config: Configuration dictionary with 'target_gate' and 'num_qubits' keys
+
+    Returns:
+        target_state: Target density matrix (d x d)
+    """
+    from metaqctrl.quantum.gates import TargetGates
+
+    target_gate_name = config.get('target_gate', 'hadamard')
+    num_qubits = config.get('num_qubits', 1)
+
+    # Get target unitary
+    if target_gate_name == 'hadamard':
+        U_target = TargetGates.hadamard()
+    elif target_gate_name == 'pauli_x':
+        U_target = TargetGates.pauli_x()
+    elif target_gate_name == 'pauli_y':
+        U_target = TargetGates.pauli_y()
+    elif target_gate_name == 'pauli_z':
+        U_target = TargetGates.pauli_z()
+    elif target_gate_name == 'cnot':
+        U_target = TargetGates.cnot()
+    else:
+        raise ValueError(f"Unknown target gate: {target_gate_name}")
+
+    # Initial state (|0...0⟩)
+    d = 2 ** num_qubits
+    ket_0 = np.zeros(d, dtype=complex)
+    ket_0[0] = 1.0
+
+    # Target state: U|0...0⟩
+    target_ket = U_target @ ket_0
+    target_state = np.outer(target_ket, target_ket.conj())
+
+    return target_state
+
+
 # Factory function
-def create_quantum_environment(config: dict, target_state: np.ndarray) -> QuantumEnvironment:
+def create_quantum_environment(config: dict, target_state: np.ndarray = None) -> QuantumEnvironment:
     """
     Create quantum environment from config.
-    
+
     Args:
         config: Configuration dictionary
-        target_state: Target density matrix
-        
+        target_state: Target density matrix. If None, will be created from config['target_gate']
+
     Returns:
         env: QuantumEnvironment instance
     """
     from metaqctrl.quantum.noise_models import NoisePSDModel, PSDToLindblad
+
+    # Get target state if not provided
+    if target_state is None:
+        target_state = get_target_state_from_config(config)
     
     # Pauli matrices for 1-qubit
     sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)

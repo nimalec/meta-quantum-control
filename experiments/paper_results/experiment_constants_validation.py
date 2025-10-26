@@ -25,11 +25,11 @@ from scipy import linalg
 # Add src to path
 #sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from metactrl.quantum.lindblad import LindbladSimulator
-from metactrl.quantum.noise_models import TaskDistribution, NoiseParameters, PSDToLindblad
-from metactrl.quantum.gates import state_fidelity
-from metactrl.theory.quantum_environment import create_quantum_environment
-from metactrl.theory.physics_constants import (
+from metaqctrl.quantum.lindblad import LindbladSimulator
+from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters, PSDToLindblad
+from metaqctrl.quantum.gates import state_fidelity
+from metaqctrl.theory.quantum_environment import create_quantum_environment
+from metaqctrl.theory.physics_constants import (
     compute_spectral_gap,
     estimate_filter_constant,
     estimate_pl_constant,

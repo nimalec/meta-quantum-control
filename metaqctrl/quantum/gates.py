@@ -233,7 +233,7 @@ class TargetGates:
     
     @staticmethod
     def arbitrary_unitary(alpha: float, beta: float, gamma: float) -> np.ndarray:
-        """Good. 
+        """Good.
         Arbitrary single-qubit unitary via Euler angles.
         U = Rz(γ) Ry(β) Rz(α)
         """
@@ -241,6 +241,23 @@ class TargetGates:
         Ry_beta = TargetGates.rotation_y(beta)
         Rz_gamma = TargetGates.rotation_z(gamma)
         return Rz_gamma @ Ry_beta @ Rz_alpha
+
+    @staticmethod
+    def cnot() -> np.ndarray:
+        """CNOT (controlled-NOT) gate for 2 qubits.
+
+        Control on qubit 0, target on qubit 1.
+        |00⟩ → |00⟩
+        |01⟩ → |01⟩
+        |10⟩ → |11⟩
+        |11⟩ → |10⟩
+        """
+        return np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 0, 1],
+            [0, 0, 1, 0]
+        ], dtype=complex)
 
 
 # JAX versions for fast autodiff
