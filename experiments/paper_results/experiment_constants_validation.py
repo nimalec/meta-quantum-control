@@ -34,6 +34,7 @@ import yaml
 from metaqctrl.theory.physics_constants import (
     compute_spectral_gap,
     estimate_filter_constant,
+    estimate_pl_constant,
     estimate_PL_constant_from_convergence,
     compute_control_relevant_variance,
     estimate_all_constants
