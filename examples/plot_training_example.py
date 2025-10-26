@@ -1,83 +1,80 @@
 """
-Example: How to generate plots from MAML training checkpoints
+Example script for plotting training results from training_history.json
 
-This script demonstrates various ways to visualize your meta-RL training results.
+This demonstrates how to use the plotting utilities to generate
+publication-quality figures from your MAML training runs.
 """
 
 from pathlib import Path
 import sys
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "metaqctrl"))
 
-from metaqctrl.utils.plot_training import (
-    plot_training_loss,
-    plot_fidelity,
-    plot_validation_losses,
-    plot_combined_metrics,
-    plot_loss_comparison,
-    print_checkpoint_summary
+from utils.plot_training import (
+    plot_from_history,
+    plot_validation_only,
+    plot_complete_summary
 )
 
 
-def example_single_checkpoint():
+def main():
     """
-    Generate all standard plots from a single checkpoint.
+    Generate all plots from a training_history.json file.
+    
+    Usage:
+        python plot_training_example.py
     """
-    # Path to your checkpoint
-    checkpoint_path = "../checkpoints/maml_8.pt"
-
-    # Output directory
-    output_dir = "results/figures/training"
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-    print("Generating plots from single checkpoint...")
-
-    # 1. Print summary of checkpoint contents
-    print_checkpoint_summary(checkpoint_path)
-
-    # 2. Plot training loss
-    plot_training_loss(
-        checkpoint_path,
-        save_path=f"{output_dir}/training_loss_3.png",
-        smooth_window=10,
-        show_smoothed=True
-    )
-
-    # 3. Plot fidelity (1 - loss)
-    plot_fidelity(
-        checkpoint_path,
-        save_path=f"{output_dir}/fidelity_3.png",
-        smooth_window=10,
-        show_smoothed=True
-    )
-
-    # 4. Plot validation losses
-    plot_validation_losses(
-        checkpoint_path,
-        save_path=f"{output_dir}/validation_loss_3.png"
-    )
-
-    # 5. Combined metrics (2x2 grid)
-    plot_combined_metrics(
-        checkpoint_path,
-        save_path=f"{output_dir}/combined_metrics_3.png",
-        smooth_window=10
-    )
-
-    print(f"\nAll plots saved to {output_dir}/")
-
-
-
-if __name__ == '__main__':
+    
+    # Path to your training history
+    # Modify this to point to your actual training history file
+    history_path = "../checkpoints/training_history.json"
+    
+    # Output directory for figures
+    output_dir = "../results/figures"
+    
     print("=" * 70)
-    print("MAML Training Visualization Examples")
+    print("Generating Training Plots")
+    print("=" * 70)
+    print(f"Input: {history_path}")
+    print(f"Output: {output_dir}\n")
+    
+    # 1. Training and validation curves (side-by-side)
+    print("[1/3] Creating training and validation curves...")
+    plot_from_history(
+        history_path=history_path,
+        save_dir=output_dir,
+        smooth_window=10,
+        figsize=(12, 5),
+        dpi=300
+    )
+    
+    # 2. Validation fidelity only (with error bars)
+    print("[2/3] Creating validation fidelity plot...")
+    plot_validation_only(
+        history_path=history_path,
+        save_dir=output_dir,
+        figsize=(7, 5),
+        dpi=300
+    )
+    
+    # 3. Complete summary (2x2 grid)
+    print("[3/3] Creating complete summary...")
+    plot_complete_summary(
+        history_path=history_path,
+        save_dir=output_dir,
+        smooth_window=10,
+        figsize=(14, 10),
+        dpi=300
+    )
+    
+    print("\n" + "=" * 70)
+    print("Done! All plots saved to:")
+    print("  - training_validation_curves.png")
+    print("  - validation_fidelity.png")
+    print("  - complete_training_summary.png")
     print("=" * 70)
 
-    # Note: Update checkpoint paths to match your actual checkpoints
 
-    print("\n[Example 1] Single checkpoint analysis")
-    print("-" * 70)
-    print("Uncomment the line below and update the checkpoint path:")
-    print("# example_single_checkpoint()")
-    example_single_checkpoint() 
+if __name__ == "__main__":
+    main()

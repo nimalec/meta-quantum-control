@@ -12,6 +12,7 @@ Creates publication-quality plots for meta-RL papers including:
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 import seaborn as sns
@@ -545,45 +546,337 @@ def print_checkpoint_summary(checkpoint_path: str):
     print("=" * 60)
 
 
+def load_training_history(history_path: str) -> Dict:
+    """
+    Load training history from JSON file.
+
+    Args:
+        history_path: Path to training_history.json file
+
+    Returns:
+        Dictionary containing training history
+    """
+    with open(history_path, 'r') as f:
+        history = json.load(f)
+    return history
+
+
+def plot_from_history(
+    history_path: str,
+    save_dir: Optional[str] = None,
+    smooth_window: int = 10,
+    figsize: Tuple[float, float] = (12, 5),
+    dpi: int = 300
+):
+    """
+    Create publication-quality training and validation plots from training_history.json.
+
+    Generates two side-by-side plots:
+    - Left: Meta-training loss over iterations
+    - Right: Validation error and fidelity over iterations
+
+    Args:
+        history_path: Path to training_history.json file
+        save_dir: Directory to save plots (if None, displays instead)
+        smooth_window: Window size for smoothing training loss
+        figsize: Figure size in inches
+        dpi: Resolution for saving
+    """
+    history = load_training_history(history_path)
+
+    # Extract data
+    iterations = np.array(history['iteration'])
+    meta_loss = np.array(history['meta_loss'])
+    val_iterations = np.array(history['val_iteration'])
+    val_error = np.array(history['val_error'])
+    val_fidelity = np.array(history['val_fidelity'])
+    val_fidelity_std = np.array(history['val_fidelity_std'])
+
+    # Create figure with two subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+
+    # Left plot: Training loss
+    ax1.plot(iterations, meta_loss, alpha=0.3, color='tab:blue', linewidth=0.5, label='Raw')
+    smoothed_loss = smooth_curve(meta_loss, window=smooth_window)
+    ax1.plot(iterations, smoothed_loss, color='tab:blue', linewidth=2,
+             label=f'Smoothed (window={smooth_window})')
+    ax1.set_xlabel('Iteration')
+    ax1.set_ylabel('Meta-Training Loss')
+    ax1.set_title('(a) Meta-Training Loss')
+    ax1.grid(True, alpha=0.3)
+    ax1.legend(framealpha=0.9, loc='best')
+
+    # Right plot: Validation error and fidelity
+    ax2_twin = ax2.twinx()
+
+    # Plot validation error (left y-axis)
+    line1 = ax2.plot(val_iterations, val_error, marker='o', color='tab:red',
+                     linewidth=2, markersize=6, label='Validation Error')
+    ax2.set_xlabel('Iteration')
+    ax2.set_ylabel('Validation Error', color='tab:red')
+    ax2.tick_params(axis='y', labelcolor='tab:red')
+
+    # Plot validation fidelity with error bars (right y-axis)
+    line2 = ax2_twin.errorbar(val_iterations, val_fidelity, yerr=val_fidelity_std,
+                               marker='s', color='tab:green', linewidth=2, markersize=6,
+                               capsize=4, capthick=1.5, label='Validation Fidelity')
+    ax2_twin.set_ylabel('Validation Fidelity', color='tab:green')
+    ax2_twin.tick_params(axis='y', labelcolor='tab:green')
+    ax2_twin.set_ylim([0, 1.05])
+    ax2_twin.axhline(y=1.0, color='gray', linestyle='--', alpha=0.3, linewidth=1)
+
+    ax2.set_title('(b) Validation Metrics')
+    ax2.grid(True, alpha=0.3)
+
+    # Combine legends
+    lines = line1 + [line2]
+    labels = [l.get_label() for l in lines]
+    ax2.legend(lines, labels, loc='best', framealpha=0.9)
+
+    plt.tight_layout()
+
+    if save_dir:
+        save_dir = Path(save_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        save_path = save_dir / "training_validation_curves.png"
+        plt.savefig(save_path, dpi=dpi, bbox_inches='tight')
+        print(f"Saved training/validation plot to {save_path}")
+    else:
+        plt.show()
+
+    plt.close()
+
+
+def plot_validation_only(
+    history_path: str,
+    save_dir: Optional[str] = None,
+    figsize: Tuple[float, float] = (7, 5),
+    dpi: int = 300
+):
+    """
+    Plot only validation fidelity with error bars.
+
+    Args:
+        history_path: Path to training_history.json file
+        save_dir: Directory to save plots (if None, displays instead)
+        figsize: Figure size in inches
+        dpi: Resolution for saving
+    """
+    history = load_training_history(history_path)
+
+    val_iterations = np.array(history['val_iteration'])
+    val_fidelity = np.array(history['val_fidelity'])
+    val_fidelity_std = np.array(history['val_fidelity_std'])
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # Plot with error bars
+    ax.errorbar(val_iterations, val_fidelity, yerr=val_fidelity_std,
+                marker='o', color='tab:green', linewidth=2, markersize=8,
+                capsize=5, capthick=2, elinewidth=1.5, label='Validation Fidelity')
+
+    ax.set_xlabel('Iteration')
+    ax.set_ylabel('Fidelity')
+    ax.set_title('Validation Fidelity over Iterations')
+    ax.set_ylim([0, 1.05])
+    ax.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5, linewidth=1, label='Perfect Fidelity')
+    ax.grid(True, alpha=0.3)
+    ax.legend(framealpha=0.9, loc='best')
+
+    plt.tight_layout()
+
+    if save_dir:
+        save_dir = Path(save_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        save_path = save_dir / "validation_fidelity.png"
+        plt.savefig(save_path, dpi=dpi, bbox_inches='tight')
+        print(f"Saved validation fidelity plot to {save_path}")
+    else:
+        plt.show()
+
+    plt.close()
+
+
+def plot_complete_summary(
+    history_path: str,
+    save_dir: Optional[str] = None,
+    smooth_window: int = 10,
+    figsize: Tuple[float, float] = (14, 10),
+    dpi: int = 300
+):
+    """
+    Create comprehensive summary plot with all metrics from training_history.json.
+
+    Creates a 2x2 grid with:
+    - Top left: Training loss (smoothed)
+    - Top right: Training fidelity (computed as 1 - loss)
+    - Bottom left: Validation error over iterations
+    - Bottom right: Validation fidelity with error bars
+
+    Args:
+        history_path: Path to training_history.json file
+        save_dir: Directory to save plots (if None, displays instead)
+        smooth_window: Window size for smoothing
+        figsize: Figure size in inches
+        dpi: Resolution for saving
+    """
+    history = load_training_history(history_path)
+
+    # Extract data
+    iterations = np.array(history['iteration'])
+    meta_loss = np.array(history['meta_loss'])
+    val_iterations = np.array(history['val_iteration'])
+    val_error = np.array(history['val_error'])
+    val_fidelity = np.array(history['val_fidelity'])
+    val_fidelity_std = np.array(history['val_fidelity_std'])
+
+    # Compute training fidelity
+    train_fidelity = 1.0 - meta_loss
+
+    fig = plt.figure(figsize=figsize)
+    gs = fig.add_gridspec(2, 2, hspace=0.3, wspace=0.3)
+
+    # Top left: Training loss
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax1.plot(iterations, meta_loss, alpha=0.3, color='tab:blue', linewidth=0.5)
+    smoothed_loss = smooth_curve(meta_loss, window=smooth_window)
+    ax1.plot(iterations, smoothed_loss, color='tab:blue', linewidth=2,
+             label=f'Smoothed (window={smooth_window})')
+    ax1.set_xlabel('Iteration')
+    ax1.set_ylabel('Meta-Training Loss')
+    ax1.set_title('(a) Training Loss')
+    ax1.grid(True, alpha=0.3)
+    ax1.legend(framealpha=0.9, loc='best')
+
+    # Top right: Training fidelity
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.plot(iterations, train_fidelity, alpha=0.3, color='tab:green', linewidth=0.5)
+    smoothed_fidelity = smooth_curve(train_fidelity, window=smooth_window)
+    ax2.plot(iterations, smoothed_fidelity, color='tab:green', linewidth=2,
+             label=f'Smoothed (window={smooth_window})')
+    ax2.set_xlabel('Iteration')
+    ax2.set_ylabel('Fidelity')
+    ax2.set_title('(b) Training Fidelity')
+    ax2.set_ylim([0, 1.05])
+    ax2.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5, linewidth=1)
+    ax2.grid(True, alpha=0.3)
+    ax2.legend(framealpha=0.9, loc='best')
+
+    # Bottom left: Validation error
+    ax3 = fig.add_subplot(gs[1, 0])
+    ax3.plot(val_iterations, val_error, marker='o', color='tab:red',
+             linewidth=2, markersize=6, label='Validation Error')
+    ax3.set_xlabel('Iteration')
+    ax3.set_ylabel('Validation Error')
+    ax3.set_title('(c) Validation Error')
+    ax3.grid(True, alpha=0.3)
+    ax3.legend(framealpha=0.9, loc='best')
+
+    # Bottom right: Validation fidelity with error bars
+    ax4 = fig.add_subplot(gs[1, 1])
+    ax4.errorbar(val_iterations, val_fidelity, yerr=val_fidelity_std,
+                 marker='o', color='tab:green', linewidth=2, markersize=6,
+                 capsize=5, capthick=2, elinewidth=1.5, label='Validation Fidelity')
+    ax4.set_xlabel('Iteration')
+    ax4.set_ylabel('Fidelity')
+    ax4.set_title('(d) Validation Fidelity (with std)')
+    ax4.set_ylim([0, 1.05])
+    ax4.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5, linewidth=1)
+    ax4.grid(True, alpha=0.3)
+    ax4.legend(framealpha=0.9, loc='best')
+
+    plt.suptitle('MAML Training Summary', fontsize=16, y=0.98)
+
+    if save_dir:
+        save_dir = Path(save_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        save_path = save_dir / "complete_training_summary.png"
+        plt.savefig(save_path, dpi=dpi, bbox_inches='tight')
+        print(f"Saved complete summary to {save_path}")
+    else:
+        plt.show()
+
+    plt.close()
+
+
 if __name__ == '__main__':
     import sys
 
     if len(sys.argv) < 2:
-        print("Usage: python plot_training.py <checkpoint_path> [output_dir]")
-        print("\nExample:")
+        print("Usage: python plot_training.py <path> [output_dir]")
+        print("\nPath can be either:")
+        print("  - training_history.json (for JSON-based plotting)")
+        print("  - checkpoint.pt (for checkpoint-based plotting)")
+        print("\nExamples:")
+        print("  python plot_training.py checkpoints/training_history.json results/figures/")
         print("  python plot_training.py checkpoints/maml_20241025_120000.pt results/figures/")
         sys.exit(1)
 
-    checkpoint_path = sys.argv[1]
+    input_path = sys.argv[1]
     output_dir = sys.argv[2] if len(sys.argv) > 2 else 'results/figures'
 
     # Create output directory
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    # Print summary
-    print_checkpoint_summary(checkpoint_path)
+    # Detect input type
+    if input_path.endswith('.json'):
+        print(f"Loading training history from JSON: {input_path}\n")
 
-    # Generate all plots
-    print("\nGenerating plots...")
+        # Generate plots from JSON
+        print("Generating plots from training history...")
 
-    plot_training_loss(
-        checkpoint_path,
-        save_path=f"{output_dir}/training_loss.png"
-    )
+        plot_from_history(
+            input_path,
+            save_dir=output_dir
+        )
 
-    plot_fidelity(
-        checkpoint_path,
-        save_path=f"{output_dir}/training_fidelity.png"
-    )
+        plot_validation_only(
+            input_path,
+            save_dir=output_dir
+        )
 
-    plot_validation_losses(
-        checkpoint_path,
-        save_path=f"{output_dir}/validation_loss.png"
-    )
+        plot_complete_summary(
+            input_path,
+            save_dir=output_dir
+        )
 
-    plot_combined_metrics(
-        checkpoint_path,
-        save_path=f"{output_dir}/combined_metrics.png"
-    )
+        print(f"\nAll plots saved to {output_dir}/")
+        print("  - training_validation_curves.png")
+        print("  - validation_fidelity.png")
+        print("  - complete_training_summary.png")
 
-    print(f"\nAll plots saved to {output_dir}/")
+    elif input_path.endswith('.pt'):
+        print(f"Loading checkpoint: {input_path}\n")
+
+        # Print summary
+        print_checkpoint_summary(input_path)
+
+        # Generate plots from checkpoint
+        print("\nGenerating plots from checkpoint...")
+
+        plot_training_loss(
+            input_path,
+            save_path=f"{output_dir}/training_loss.png"
+        )
+
+        plot_fidelity(
+            input_path,
+            save_path=f"{output_dir}/training_fidelity.png"
+        )
+
+        plot_validation_losses(
+            input_path,
+            save_path=f"{output_dir}/validation_loss.png"
+        )
+
+        plot_combined_metrics(
+            input_path,
+            save_path=f"{output_dir}/combined_metrics.png"
+        )
+
+        print(f"\nAll plots saved to {output_dir}/")
+
+    else:
+        print(f"Error: Unrecognized file type. Path must end with .json or .pt")
+        print(f"Got: {input_path}")
+        sys.exit(1)

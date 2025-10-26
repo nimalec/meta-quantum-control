@@ -487,6 +487,16 @@ class MAMLTrainer:
         
         self.iteration = 0
         self.best_val_loss = float('inf')
+
+        # Training history tracking
+        self.training_history = {
+            'meta_loss': [],           # Tracked every iteration
+            'iteration': [],           # Tracked every iteration
+            'val_fidelity': [],        # Tracked at val_interval
+            'val_error': [],           # Tracked at val_interval
+            'val_iteration': [],       # Tracks which iterations have validation
+            'val_fidelity_std': []     # Track uncertainty
+        }
     
     def generate_task_batch(self, n_tasks: int, split: str = 'train') -> List[Dict]:
         """
@@ -552,7 +562,11 @@ class MAMLTrainer:
             
             # Meta-training step
             train_metrics = self.maml.meta_train_step(task_batch, self.loss_fn)
-            
+
+            # Track training metrics
+            self.training_history['meta_loss'].append(train_metrics['meta_loss'])
+            self.training_history['iteration'].append(iteration)
+
             # Logging
             if iteration % self.log_interval == 0:
                 # FIXED: Add more informative logging with gradient norm
@@ -579,12 +593,24 @@ class MAMLTrainer:
             if iteration % self.val_interval == 0 and iteration > 0:
                 val_task_batch = self.generate_task_batch(val_tasks, split='val')
                 val_metrics = self.maml.meta_validate(val_task_batch, self.loss_fn)
-                
+
+                # Track validation metrics (loss = 1 - fidelity)
+                val_fidelity = 1.0 - val_metrics['val_loss_post_adapt']
+                val_error = val_metrics['val_loss_post_adapt']
+                val_fidelity_std = val_metrics['std_post_adapt']
+
+                self.training_history['val_fidelity'].append(val_fidelity)
+                self.training_history['val_error'].append(val_error)
+                self.training_history['val_iteration'].append(iteration)
+                self.training_history['val_fidelity_std'].append(val_fidelity_std)
+
                 print(f"\n[Validation] Iter {iteration}")
                 print(f"  Pre-adapt loss:  {val_metrics['val_loss_pre_adapt']:.4f}")
                 print(f"  Post-adapt loss: {val_metrics['val_loss_post_adapt']:.4f}")
+                print(f"  Val Fidelity: {val_fidelity:.4f} ± {val_fidelity_std:.4f}")
+                print(f"  Val Error: {val_error:.4f}")
                 print(f"  Adaptation gain: {val_metrics['adaptation_gain']:.4f}\n")
-                
+
                 # Save best model
                 if save_path and val_metrics['val_loss_post_adapt'] < self.best_val_loss:
                     self.best_val_loss = val_metrics['val_loss_post_adapt']
@@ -594,8 +620,24 @@ class MAMLTrainer:
         # Save final checkpoint
         if save_path:
             self.maml.save_checkpoint(save_path, n_iterations)
-        
+
+            # Save training history
+            self.save_training_history(save_path)
+
         print("\nTraining complete!")
+
+    def save_training_history(self, checkpoint_path: str):
+        """Save training history to JSON file."""
+        import json
+        from pathlib import Path
+
+        # Create history file path based on checkpoint path
+        history_path = Path(checkpoint_path).parent / "training_history.json"
+
+        with open(history_path, 'w') as f:
+            json.dump(self.training_history, f, indent=2)
+
+        print(f"Training history saved to: {history_path}")
 
 
 # Example usage
