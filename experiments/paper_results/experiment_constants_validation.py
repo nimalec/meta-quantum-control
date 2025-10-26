@@ -33,7 +33,7 @@ import yaml
 
 from metaqctrl.theory.physics_constants import (
     compute_spectral_gap,
-    estimate_filter_constant,
+    estimate_filter_constant, estimate_pl_constant,  
     estimate_PL_constant_from_convergence,
     compute_control_relevant_variance,
     estimate_all_constants
@@ -283,19 +283,6 @@ if __name__ == "__main__":
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f) 
  
-    # config = {
-    #     'num_qubits': 1,
-    #     'num_controls': 2,
-    #     'num_segments': 20,
-    #     'evolution_time': 1.0,
-    #     'target_gate': 'hadamard',
-    #     'task_dist': {
-    #         'alpha_range': [0.5, 2.0],
-    #         'A_range': [0.05, 0.3],
-    #         'omega_c_range': [2.0, 8.0]
-    #     },
-    #     'noise_frequencies': [1.0, 5.0, 10.0]
-    # }
 
   #  Run experiment
     results = run_constants_validation_experiment(
@@ -305,4 +292,4 @@ if __name__ == "__main__":
     )
 
     # # Generate visualizations
-    # plot_constant_distributions(results)
+    plot_constant_distributions(results)
