@@ -77,13 +77,16 @@ def estimate_constants_for_system(config: Dict, n_tasks: int = 30) -> Dict:
 
     # Create task distribution
     task_dist = TaskDistribution(
-        alpha_range=config['task_dist']['alpha_range'],
-        A_range=config['task_dist']['A_range'],
-        omega_c_range=config['task_dist']['omega_c_range']
+        dist_type='uniform',
+        ranges={
+            'alpha': tuple(config['task_dist']['alpha_range']),
+            'A': tuple(config['task_dist']['A_range']),
+            'omega_c': tuple(config['task_dist']['omega_c_range'])
+        }
     )
 
     # Sample tasks
-    tasks = [task_dist.sample() for _ in range(n_tasks)]
+    tasks = task_dist.sample(n_tasks)
 
     # Compute spectral gaps
     spectral_gaps = []

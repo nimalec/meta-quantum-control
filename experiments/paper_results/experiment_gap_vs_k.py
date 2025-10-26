@@ -78,16 +78,20 @@ def run_gap_vs_k_experiment(
 
     # Create quantum environment
     print("\n[2/6] Creating quantum environment...")
+    # target_state will be created from config['target_gate']
     env = create_quantum_environment(config)
 
     # Sample test tasks
     print(f"\n[3/6] Sampling {n_test_tasks} test tasks...")
     task_dist = TaskDistribution(
-        alpha_range=config['task_dist']['alpha_range'],
-        A_range=config['task_dist']['A_range'],
-        omega_c_range=config['task_dist']['omega_c_range']
+        dist_type=config.get('task_dist_type', 'uniform'),
+        ranges={
+            'alpha': tuple(config['task_dist']['alpha_range']),
+            'A': tuple(config['task_dist']['A_range']),
+            'omega_c': tuple(config['task_dist']['omega_c_range'])
+        }
     )
-    test_tasks = [task_dist.sample() for _ in range(n_test_tasks)]
+    test_tasks = task_dist.sample(n_test_tasks)
 
     # Measure gap for each K
     print(f"\n[4/6] Computing gaps for K = {k_values}...")

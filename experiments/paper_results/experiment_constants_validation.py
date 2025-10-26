@@ -126,8 +126,8 @@ def run_constants_validation_experiment(
         Delta = compute_spectral_gap(env, task)
         spectral_gaps.append(Delta)
 
-        # PL constant estimate
-        mu = estimate_PL_constant_from_convergence(env, task, num_samples=5)
+        # PL constant estimate (using theoretical formula)
+        mu = estimate_pl_constant(env, task, num_samples=5)
         pl_constants.append(mu)
 
     spectral_gaps = np.array(spectral_gaps)

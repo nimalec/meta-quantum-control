@@ -60,18 +60,21 @@ def create_task_distributions_with_varying_variance(
         omega_c_center = 5.0
 
         task_dist = TaskDistribution(
-            alpha_range=[
-                max(0.5, alpha_center - alpha_width/2),
-                min(2.0, alpha_center + alpha_width/2)
-            ],
-            A_range=[
-                max(0.05, A_center - A_width/2),
-                min(0.3, A_center + A_width/2)
-            ],
-            omega_c_range=[
-                max(2.0, omega_c_center - omega_c_width/2),
-                min(8.0, omega_c_center + omega_c_width/2)
-            ]
+            dist_type='uniform',
+            ranges={
+                'alpha': (
+                    max(0.5, alpha_center - alpha_width/2),
+                    min(2.0, alpha_center + alpha_width/2)
+                ),
+                'A': (
+                    max(0.05, A_center - A_width/2),
+                    min(0.3, A_center + A_width/2)
+                ),
+                'omega_c': (
+                    max(2.0, omega_c_center - omega_c_width/2),
+                    min(8.0, omega_c_center + omega_c_width/2)
+                )
+            }
         )
 
         distributions.append((task_dist, var_scale))
@@ -119,6 +122,7 @@ def run_gap_vs_variance_experiment(
 
     # Create quantum environment
     print("\n[2/6] Creating quantum environment...")
+    # target_state will be created from config['target_gate']
     env = create_quantum_environment(config)
 
     # Create task distributions with varying variance
@@ -138,14 +142,10 @@ def run_gap_vs_variance_experiment(
         print(f"\n  Variance level {idx+1}/{len(task_dists)} (target: {var_target:.5f}):")
 
         # Sample tasks from this distribution
-        test_tasks = [task_dist.sample() for _ in range(n_test_tasks)]
+        test_tasks = task_dist.sample(n_test_tasks)
 
-        # Compute actual variance
-        sigma2_S = compute_control_relevant_variance(
-            test_tasks,
-            env.omega_control,
-            env.control_susceptibility
-        )
+        # Compute actual variance using new signature
+        sigma2_S = compute_control_relevant_variance(env, test_tasks)
         variances_computed.append(sigma2_S)
         print(f"    Computed σ²_S = {sigma2_S:.5f}")
 
