@@ -157,7 +157,8 @@ def main(config_path: str):
     print(f"Device: {device}\n")
     
     # Target gate (e.g., Hadamard)
-    target_gate_name = config.get('target_gate', 'hadamard')
+    ## Establish target operation  
+    target_gate_name = config.get('target_gate', 'pauli_x')
     if target_gate_name == 'hadamard':
         U_target = TargetGates.hadamard()
     elif target_gate_name == 'pauli_x':
@@ -166,6 +167,7 @@ def main(config_path: str):
         raise ValueError(f"Unknown target gate: {target_gate_name}")
     
     # Target state: U|0⟩
+    ## Establish target operation   
     ket_0 = np.array([1, 0], dtype=complex)
     target_state = np.outer(U_target @ ket_0, (U_target @ ket_0).conj())
     print(f"Target gate: {target_gate_name}")
@@ -175,6 +177,7 @@ def main(config_path: str):
     ## Create a setting for a new enviroment
     from metaqctrl.theory.quantum_environment import create_quantum_environment
     ## Make a quantum enviroment
+    ## Establish quantum enviroment  
     env = create_quantum_environment(config, target_state)
     print(f"  Environment created: {env.get_cache_stats()}")
     
@@ -183,6 +186,7 @@ def main(config_path: str):
     task_dist = create_task_distribution(config)
     variance = task_dist.compute_variance()
     print(f"  Task variance σ²_θ = {variance:.4f}\n")
+
     
     # Create policy
     print("Creating policy network...")
@@ -195,7 +199,7 @@ def main(config_path: str):
         output_scale=config.get('output_scale', 1.0),
         activation=config.get('activation', 'tanh')
     )
-    ## Make a policy 
+    ## Make a policy  
     policy = policy.to(device)
     print(f"  Parameters: {policy.count_parameters():,}")
     print(f"  Lipschitz constant: {policy.get_lipschitz_constant():.2f}")
@@ -228,6 +232,7 @@ def main(config_path: str):
         
         # Repeat for batch
         task_features_batch = task_features.unsqueeze(0).repeat(n_trajectories, 1)
+        print(task_params)
         
         return {
             'task_features': task_features_batch,
@@ -261,9 +266,9 @@ def main(config_path: str):
     print("=" * 70 + "\n")
     
     trainer.train(
-        n_iterations=config.get('n_iterations', 1000),
-        tasks_per_batch=config.get('tasks_per_batch', 4),
-        val_tasks=config.get('val_tasks', 20),
+        n_iterations=config.get('n_iterations', 50),
+        tasks_per_batch=config.get('tasks_per_batch', 5),
+        val_tasks=config.get('val_tasks', 5),
         save_path=str(save_path)
     )
     

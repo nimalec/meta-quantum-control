@@ -22,17 +22,17 @@ import json
 from typing import Dict, List, Tuple
 from scipy import linalg
 
-# Add src to path
-#sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from metactrl.quantum.lindblad import LindbladSimulator
-from metactrl.quantum.noise_models import TaskDistribution, NoiseParameters, PSDToLindblad
-from metactrl.quantum.gates import state_fidelity
-from metactrl.theory.quantum_environment import create_quantum_environment
-from metactrl.theory.physics_constants import (
+from metaqctrl.quantum.lindblad import LindbladSimulator
+from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters, PSDToLindblad
+from metaqctrl.quantum.gates import state_fidelity
+from metaqctrl.theory.quantum_environment import create_quantum_environment
+from metaqctrl.quantum.gates import GateFidelityComputer, TargetGates 
+import yaml 
+from metaqctrl.theory.physics_constants import (
     compute_spectral_gap,
     estimate_filter_constant,
-    estimate_pl_constant,
+    estimate_PL_constant_from_convergence,
     compute_control_relevant_variance,
     estimate_all_constants
 )
@@ -57,17 +57,29 @@ def run_constants_validation_experiment(
 
     # Create quantum environment
     print("\n[1/5] Creating quantum environment...")
-    env = create_quantum_environment(config)
+    ## Add target state here. ..  
+    sigma_x = np.array([[0, 1], [1, 0]], dtype=complex) 
+    ket_0 = np.array([1, 0], dtype=complex) 
+    U_target = TargetGates.pauli_x() 
+    target_state = np.outer(U_target @ ket_0, (U_target @ ket_0).conj()) 
+    
+    env = create_quantum_environment(config,target_state)
 
     # Sample tasks
     print(f"\n[2/5] Sampling {n_sample_tasks} tasks...")
     task_dist = TaskDistribution(
-        alpha_range=config['task_dist']['alpha_range'],
-        A_range=config['task_dist']['A_range'],
-        omega_c_range=config['task_dist']['omega_c_range']
-    )
-    tasks = [task_dist.sample() for _ in range(n_sample_tasks)]
-
+        dist_type=config.get('task_dist_type', 'uniform'),
+        ranges={
+            'alpha': tuple(config.get('alpha_range', [0.5, 2.0])),
+            'A': tuple(config.get('A_range', [0.05, 0.3])),
+            'omega_c': tuple(config.get('omega_c_range', [2.0, 8.0]))
+        }
+    )  
+     
+   # tasks = [task_dist.sample() for _ in range(n_sample_tasks)]
+     
+    tasks = task_dist.sample(n_sample_tasks)  
+    print(len(tasks))
     # Estimate all constants
     print("\n[3/5] Estimating theoretical constants...")
     constants = estimate_all_constants(
@@ -265,26 +277,30 @@ def plot_constant_distributions(results: Dict, output_dir: str = "results/consta
 
 if __name__ == "__main__":
     # Configuration matching paper
-    config = {
-        'num_qubits': 1,
-        'num_controls': 2,
-        'num_segments': 20,
-        'evolution_time': 1.0,
-        'target_gate': 'hadamard',
-        'task_dist': {
-            'alpha_range': [0.5, 2.0],
-            'A_range': [0.05, 0.3],
-            'omega_c_range': [2.0, 8.0]
-        },
-        'noise_frequencies': [1.0, 5.0, 10.0]
-    }
+    config_path='../../configs/experiment_config.yaml' 
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f) 
+ 
+    # config = {
+    #     'num_qubits': 1,
+    #     'num_controls': 2,
+    #     'num_segments': 20,
+    #     'evolution_time': 1.0,
+    #     'target_gate': 'hadamard',
+    #     'task_dist': {
+    #         'alpha_range': [0.5, 2.0],
+    #         'A_range': [0.05, 0.3],
+    #         'omega_c_range': [2.0, 8.0]
+    #     },
+    #     'noise_frequencies': [1.0, 5.0, 10.0]
+    # }
 
-    # Run experiment
+  #  Run experiment
     results = run_constants_validation_experiment(
         config=config,
         n_sample_tasks=50,
         output_dir="results/constants_validation"
     )
 
-    # Generate visualizations
-    plot_constant_distributions(results)
+    # # Generate visualizations
+    # plot_constant_distributions(results)
