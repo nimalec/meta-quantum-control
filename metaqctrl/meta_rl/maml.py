@@ -185,21 +185,56 @@ class MAML:
         """
         self.meta_optimizer.zero_grad()
 
-        meta_loss = 0.0
+        meta_loss_tensor = None  # Will accumulate query losses as tensors
         task_losses = []
         use_manual_grads = False  # Track if we're using manual gradient computation
 
         for task_data in task_batch:
-            if use_higher and not self.first_order:
-                # Second-order MAML (requires higher library)
-                if not HIGHER_AVAILABLE:
-                    # Fall back to first-order if higher not available
-                    adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
-                    query_loss = loss_fn(adapted_policy, task_data['query'])
-                else:
-                    fmodel, inner_losses = self.inner_loop_higher(task_data, loss_fn)
-                    # Evaluate on query set
-                    query_loss = loss_fn(fmodel, task_data['query'])
+            if use_higher and not self.first_order and HIGHER_AVAILABLE:
+                # Second-order MAML with higher library
+                # CRITICAL: Must compute query loss INSIDE the higher context
+                support_data = task_data['support']
+                query_data = task_data['query']
+
+                inner_losses = []
+                inner_opt = optim.SGD(self.policy.parameters(), lr=self.inner_lr)
+
+                with higher.innerloop_ctx(
+                    self.policy,
+                    inner_opt,
+                    copy_initial_weights=True,
+                    track_higher_grads=True  # Enable gradient tracking for second-order
+                ) as (fmodel, diffopt):
+                    # Inner loop adaptation
+                    for step in range(self.inner_steps):
+                        loss = loss_fn(fmodel, support_data)
+                        inner_losses.append(loss.item())
+                        diffopt.step(loss)
+
+                    # Compute query loss INSIDE context for proper gradient flow
+                    query_loss = loss_fn(fmodel, query_data)
+
+                    # CRITICAL FIX: higher doesn't populate .grad automatically
+                    # We need to use autograd.grad() to get gradients
+                    fmodel_params = list(fmodel.parameters())
+                    meta_params = list(self.policy.parameters())
+
+                    # Compute gradients w.r.t. adapted parameters
+                    # create_graph=True for second-order (gradient of gradient)
+                    adapted_grads = autograd.grad(
+                        query_loss,
+                        fmodel_params,
+                        create_graph=True,  # Second-order: need gradients of gradients
+                        allow_unused=True
+                    )
+
+                    # Manually accumulate gradients to meta-parameters
+                    for meta_param, adapted_grad in zip(meta_params, adapted_grads):
+                        if adapted_grad is not None:
+                            if meta_param.grad is None:
+                                meta_param.grad = adapted_grad
+                            else:
+                                meta_param.grad = meta_param.grad + adapted_grad
 
             else:
                 # First-order MAML - use manual gradient computation
@@ -274,11 +309,17 @@ class MAML:
                 # Skip this task or use fallback value
                 query_loss = torch.tensor(1.0, device=self.device, requires_grad=False)
 
-            meta_loss += query_loss.item()  # Accumulate as scalar for tracking
+            # CRITICAL FIX: Accumulate query losses as tensors to preserve gradient graph
+            if meta_loss_tensor is None:
+                meta_loss_tensor = query_loss
+            else:
+                meta_loss_tensor = meta_loss_tensor + query_loss
+
             task_losses.append(query_loss.item())
 
         # Average over tasks
-        meta_loss = meta_loss / len(task_batch)
+        meta_loss_tensor = meta_loss_tensor / len(task_batch)
+        meta_loss = meta_loss_tensor.item()
 
         # NEW: Check meta_loss before backward
         if np.isnan(meta_loss) or np.isinf(meta_loss):
@@ -294,17 +335,11 @@ class MAML:
             }
 
         # Meta-gradient step
-        if not use_manual_grads:
-            # For second-order MAML: compute gradients via backward()
-            meta_loss_tensor = torch.tensor(meta_loss, device=self.device, requires_grad=True)
-            meta_loss_tensor.backward()
-
-        # For first-order MAML: gradients already manually accumulated above
-        # Average the accumulated gradients
-        if use_manual_grads:
-            for param in self.policy.parameters():
-                if param.grad is not None:
-                    param.grad = param.grad / len(task_batch)
+        # Gradients have been manually accumulated via autograd.grad()
+        # Now average them over the task batch
+        for param in self.policy.parameters():
+            if param.grad is not None:
+                param.grad = param.grad / len(task_batch)
 
         # NEW: Check gradients for NaN/Inf
         grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
