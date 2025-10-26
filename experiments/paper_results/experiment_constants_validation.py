@@ -33,7 +33,12 @@ import yaml
 
 from metaqctrl.theory.physics_constants import (
     compute_spectral_gap,
+<<<<<<< HEAD
     estimate_filter_constant, estimate_pl_constant,  
+=======
+    estimate_filter_constant,
+    estimate_pl_constant,
+>>>>>>> 3362f57a8f86fe44262fe84867ebb8bfb7ce1867
     estimate_PL_constant_from_convergence,
     compute_control_relevant_variance,
     estimate_all_constants
