@@ -38,7 +38,7 @@ def load_checkpoint(checkpoint_path: str) -> Dict:
     Returns:
         Dictionary containing checkpoint data
     """
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     return checkpoint
 
 

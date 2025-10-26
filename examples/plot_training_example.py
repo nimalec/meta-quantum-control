@@ -25,7 +25,7 @@ def example_single_checkpoint():
     Generate all standard plots from a single checkpoint.
     """
     # Path to your checkpoint
-    checkpoint_path = "../checkpoints/maml_0.pt"
+    checkpoint_path = "../checkpoints/maml_1.pt"
 
     # Output directory
     output_dir = "results/figures/training"
