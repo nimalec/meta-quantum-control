@@ -27,8 +27,11 @@ from metaqctrl.quantum.lindblad import LindbladSimulator
 from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters, PSDToLindblad
 from metaqctrl.quantum.gates import state_fidelity
 from metaqctrl.theory.quantum_environment import create_quantum_environment
+<<<<<<< HEAD
 from metaqctrl.quantum.gates import GateFidelityComputer, TargetGates 
 import yaml 
+=======
+>>>>>>> 8644d7dc6354da60b6947d7ca96f0c972df70d60
 from metaqctrl.theory.physics_constants import (
     compute_spectral_gap,
     estimate_filter_constant,
