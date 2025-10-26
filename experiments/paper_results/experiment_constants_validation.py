@@ -27,11 +27,10 @@ from metaqctrl.quantum.lindblad import LindbladSimulator
 from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters, PSDToLindblad
 from metaqctrl.quantum.gates import state_fidelity
 from metaqctrl.theory.quantum_environment import create_quantum_environment
-<<<<<<< HEAD
+
 from metaqctrl.quantum.gates import GateFidelityComputer, TargetGates 
 import yaml 
-=======
->>>>>>> 8644d7dc6354da60b6947d7ca96f0c972df70d60
+
 from metaqctrl.theory.physics_constants import (
     compute_spectral_gap,
     estimate_filter_constant,
@@ -128,7 +127,7 @@ def run_constants_validation_experiment(
         spectral_gaps.append(Delta)
 
         # PL constant estimate
-        mu = estimate_pl_constant(env, task, num_samples=5)
+        mu = estimate_PL_constant_from_convergence(env, task, num_samples=5)
         pl_constants.append(mu)
 
     spectral_gaps = np.array(spectral_gaps)

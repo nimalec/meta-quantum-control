@@ -25,7 +25,7 @@ def example_single_checkpoint():
     Generate all standard plots from a single checkpoint.
     """
     # Path to your checkpoint
-    checkpoint_path = "../checkpoints/maml_6.pt"
+    checkpoint_path = "../checkpoints/maml_8.pt"
 
     # Output directory
     output_dir = "results/figures/training"
@@ -39,7 +39,7 @@ def example_single_checkpoint():
     # 2. Plot training loss
     plot_training_loss(
         checkpoint_path,
-        save_path=f"{output_dir}/training_loss_2.png",
+        save_path=f"{output_dir}/training_loss_3.png",
         smooth_window=10,
         show_smoothed=True
     )
@@ -47,7 +47,7 @@ def example_single_checkpoint():
     # 3. Plot fidelity (1 - loss)
     plot_fidelity(
         checkpoint_path,
-        save_path=f"{output_dir}/fidelity_2.png",
+        save_path=f"{output_dir}/fidelity_3.png",
         smooth_window=10,
         show_smoothed=True
     )
@@ -55,13 +55,13 @@ def example_single_checkpoint():
     # 4. Plot validation losses
     plot_validation_losses(
         checkpoint_path,
-        save_path=f"{output_dir}/validation_loss_2.png"
+        save_path=f"{output_dir}/validation_loss_3.png"
     )
 
     # 5. Combined metrics (2x2 grid)
     plot_combined_metrics(
         checkpoint_path,
-        save_path=f"{output_dir}/combined_metrics_2.png",
+        save_path=f"{output_dir}/combined_metrics_3.png",
         smooth_window=10
     )
 

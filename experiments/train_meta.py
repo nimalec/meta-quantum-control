@@ -231,9 +231,7 @@ def main(config_path: str):
         )
         
         # Repeat for batch
-        task_features_batch = task_features.unsqueeze(0).repeat(n_trajectories, 1)
-        print(task_params)
-        
+        task_features_batch = task_features.unsqueeze(0).repeat(n_trajectories, 1)         
         return {
             'task_features': task_features_batch,
             'task_params': task_params  # Single task params
