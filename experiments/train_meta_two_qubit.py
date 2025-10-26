@@ -193,9 +193,12 @@ def train_maml_two_qubit(config: Dict, output_dir: str = "checkpoints/two_qubit"
 
     best_val_fidelity = 0.0
     training_history = {
-        'meta_loss': [],
-        'val_fidelity': [],
-        'iteration': []
+        'meta_loss': [],           # Tracked every iteration
+        'iteration': [],           # Tracked every iteration
+        'val_fidelity': [],        # Tracked at val_interval
+        'val_error': [],           # Tracked at val_interval
+        'val_iteration': [],       # Tracks which iterations have validation
+        'val_fidelity_std': []     # Track uncertainty
     }
 
     for iteration in range(config['maml']['num_iterations']):
@@ -263,9 +266,14 @@ def train_maml_two_qubit(config: Dict, output_dir: str = "checkpoints/two_qubit"
             val_fid_mean = np.mean(val_fidelities)
             val_fid_std = np.std(val_fidelities)
 
+            # Save validation metrics
             training_history['val_fidelity'].append(val_fid_mean)
+            training_history['val_error'].append(1.0 - val_fid_mean)
+            training_history['val_iteration'].append(iteration)
+            training_history['val_fidelity_std'].append(val_fid_std)
 
             print(f"  Val Fidelity: {val_fid_mean:.4f} ± {val_fid_std:.4f}")
+            print(f"  Val Error: {1.0 - val_fid_mean:.4f}")
 
             # Save best model
             if val_fid_mean > best_val_fidelity:
