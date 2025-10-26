@@ -187,6 +187,7 @@ class MAML:
 
         meta_loss = 0.0
         task_losses = []
+        use_manual_grads = False  # Track if we're using manual gradient computation
 
         for task_data in task_batch:
             if use_higher and not self.first_order:
@@ -201,11 +202,39 @@ class MAML:
                     query_loss = loss_fn(fmodel, task_data['query'])
 
             else:
-                # FIXED: Always use higher library for proper gradient flow
-                # Fall back to higher-based implementation even for first-order
+                # First-order MAML - use manual gradient computation
+                use_manual_grads = True
+
                 if HIGHER_AVAILABLE:
+                    # Use higher library for inner loop
                     fmodel, inner_losses = self.inner_loop_higher(task_data, loss_fn)
+
+                    # Compute query loss
                     query_loss = loss_fn(fmodel, task_data['query'])
+
+                    # CRITICAL FIX FOR FOMAML:
+                    # Manually compute gradients and apply to meta-parameters
+                    # This is what makes it "first-order" - we ignore gradients through adaptation
+                    meta_params = list(self.policy.parameters())
+                    adapted_params = list(fmodel.parameters())
+
+                    # Compute gradients w.r.t adapted parameters
+                    adapted_grads = autograd.grad(
+                        query_loss,
+                        adapted_params,
+                        create_graph=False,  # First-order: don't need second derivatives
+                        allow_unused=True
+                    )
+
+                    # Apply these gradients to meta-parameters
+                    # (accumulate since we're batching over tasks)
+                    for meta_param, adapted_grad in zip(meta_params, adapted_grads):
+                        if adapted_grad is not None:
+                            if meta_param.grad is None:
+                                meta_param.grad = adapted_grad.clone()
+                            else:
+                                meta_param.grad += adapted_grad.clone()
+
                 else:
                     # Manual first-order MAML (only if higher not available)
                     adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
@@ -213,30 +242,47 @@ class MAML:
                     # Evaluate on query set
                     query_loss = loss_fn(adapted_policy, task_data['query'])
 
+                    # For FOMAML without higher: manually compute gradients
+                    meta_params = list(self.policy.parameters())
+                    adapted_params = list(adapted_policy.parameters())
+
+                    adapted_grads = autograd.grad(
+                        query_loss,
+                        adapted_params,
+                        create_graph=False,
+                        allow_unused=True
+                    )
+
+                    for meta_param, adapted_grad in zip(meta_params, adapted_grads):
+                        if adapted_grad is not None:
+                            if meta_param.grad is None:
+                                meta_param.grad = adapted_grad.clone()
+                            else:
+                                meta_param.grad += adapted_grad.clone()
+
                     # WARNING: This won't update correctly without higher library!
                     # Recommend installing: pip install higher
-                    if self.first_order and hasattr(self, '_warned_no_higher'):
-                        if not self._warned_no_higher:
-                            print("WARNING: First-order MAML without 'higher' library may not train correctly!")
-                            print("Install with: pip install higher")
-                            self._warned_no_higher = True
+                    if not self._warned_no_higher:
+                        print("WARNING: First-order MAML without 'higher' library may not train correctly!")
+                        print("Install with: pip install higher")
+                        self._warned_no_higher = True
 
             # NEW: Check for NaN/Inf
             if torch.isnan(query_loss) or torch.isinf(query_loss):
                 print(f"WARNING: Invalid loss detected (NaN or Inf): {query_loss.item()}")
                 print(f"  Inner losses: {inner_losses}")
                 # Skip this task or use fallback value
-                query_loss = torch.tensor(1.0, device=self.device, requires_grad=True)
+                query_loss = torch.tensor(1.0, device=self.device, requires_grad=False)
 
-            meta_loss += query_loss
+            meta_loss += query_loss.item()  # Accumulate as scalar for tracking
             task_losses.append(query_loss.item())
 
         # Average over tasks
         meta_loss = meta_loss / len(task_batch)
 
         # NEW: Check meta_loss before backward
-        if torch.isnan(meta_loss) or torch.isinf(meta_loss):
-            print(f"ERROR: Invalid meta_loss detected: {meta_loss.item()}")
+        if np.isnan(meta_loss) or np.isinf(meta_loss):
+            print(f"ERROR: Invalid meta_loss detected: {meta_loss}")
             print("  Skipping this meta-update to prevent corruption")
             return {
                 'meta_loss': float('nan'),
@@ -248,7 +294,17 @@ class MAML:
             }
 
         # Meta-gradient step
-        meta_loss.backward()
+        if not use_manual_grads:
+            # For second-order MAML: compute gradients via backward()
+            meta_loss_tensor = torch.tensor(meta_loss, device=self.device, requires_grad=True)
+            meta_loss_tensor.backward()
+
+        # For first-order MAML: gradients already manually accumulated above
+        # Average the accumulated gradients
+        if use_manual_grads:
+            for param in self.policy.parameters():
+                if param.grad is not None:
+                    param.grad = param.grad / len(task_batch)
 
         # NEW: Check gradients for NaN/Inf
         grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
@@ -260,7 +316,7 @@ class MAML:
 
         # Logging
         metrics = {
-            'meta_loss': meta_loss.item(),
+            'meta_loss': meta_loss,  # Already a Python float
             'mean_task_loss': np.mean(task_losses),
             'std_task_loss': np.std(task_losses),
             'min_task_loss': np.min(task_losses),
@@ -268,7 +324,7 @@ class MAML:
             'grad_norm': grad_norm.item()  # NEW: Log gradient norm
         }
 
-        self.meta_train_losses.append(meta_loss.item())
+        self.meta_train_losses.append(meta_loss)  # Already a Python float
 
         return metrics
     
