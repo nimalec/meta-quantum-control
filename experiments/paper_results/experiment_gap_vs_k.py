@@ -66,35 +66,46 @@ def run_gap_vs_k_experiment(
 
     # Load trained policies
     print("\n[1/6] Loading trained policies...")
-    meta_policy_template = PulsePolicy(
-        task_feature_dim=3,
-        hidden_dim=config['hidden_dim'],
-        n_hidden_layers=config['n_hidden_layers'],
-        n_segments=config['n_segments'],
-        n_controls=config['n_controls']
-    )
-    # Load from checkpoint or policy-only file
-    meta_checkpoint = torch.load(meta_policy_path, map_location='cpu')
-    if isinstance(meta_checkpoint, dict) and 'policy_state_dict' in meta_checkpoint:
-        meta_policy_template.load_state_dict(meta_checkpoint['policy_state_dict'])
-    else:
-        meta_policy_template.load_state_dict(meta_checkpoint)
-    meta_policy_template.eval()
 
-    robust_policy = PulsePolicy(
-        task_feature_dim=3,
-        hidden_dim=config['hidden_dim'],
-        n_hidden_layers=config['n_hidden_layers'],
-        n_segments=config['n_segments'],
-        n_controls=config['n_controls']
-    )
-    # Load from checkpoint or policy-only file
-    robust_checkpoint = torch.load(robust_policy_path, map_location='cpu')
-    if isinstance(robust_checkpoint, dict) and 'policy_state_dict' in robust_checkpoint:
-        robust_policy.load_state_dict(robust_checkpoint['policy_state_dict'])
-    else:
-        robust_policy.load_state_dict(robust_checkpoint)
-    robust_policy.eval()
+    # Try to infer architecture from checkpoint
+    def load_policy_with_auto_architecture(checkpoint_path, config):
+        """Load policy and automatically detect architecture from checkpoint."""
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        state_dict = checkpoint['policy_state_dict'] if isinstance(checkpoint, dict) and 'policy_state_dict' in checkpoint else checkpoint
+
+        # Detect architecture from state dict keys
+        layer_keys = [k for k in state_dict.keys() if 'network' in k and 'weight' in k]
+        max_layer_idx = max([int(k.split('.')[1]) for k in layer_keys])
+
+        # Count hidden layers (exclude input layer 0, activation layers, and output layer)
+        # Architecture: [input(0), act(1), hidden(2), act(3), ..., output(max_layer_idx)]
+        n_hidden_layers = (max_layer_idx - 2) // 2  # Each hidden layer has weight + activation
+
+        # Detect hidden_dim from first layer output shape
+        first_layer_key = 'network.0.weight'
+        if first_layer_key in state_dict:
+            hidden_dim = state_dict[first_layer_key].shape[0]
+        else:
+            hidden_dim = config['hidden_dim']  # fallback
+
+        print(f"    Detected architecture: hidden_dim={hidden_dim}, n_hidden_layers={n_hidden_layers}")
+
+        # Create policy with detected architecture
+        policy = PulsePolicy(
+            task_feature_dim=3,
+            hidden_dim=hidden_dim,
+            n_hidden_layers=n_hidden_layers,
+            n_segments=config['n_segments'],
+            n_controls=config['n_controls']
+        )
+
+        # Load state dict
+        policy.load_state_dict(state_dict)
+        policy.eval()
+        return policy
+
+    meta_policy_template = load_policy_with_auto_architecture(meta_policy_path, config)
+    robust_policy = load_policy_with_auto_architecture(robust_policy_path, config)
 
     # Create quantum environment
     print("\n[2/6] Creating quantum environment...")
@@ -369,19 +380,53 @@ if __name__ == "__main__":
     }
 
     # Paths to trained models (adjust as needed)
-    meta_path = "checkpoints/maml_best.pt"
-    robust_path = "checkpoints/robust_best.pt"
+    # Try multiple possible locations
+    script_dir = Path(__file__).parent
+    possible_meta_paths = [
+        "checkpoints/maml_best.pt",
+        "../checkpoints/maml_best.pt",
+        script_dir.parent / "checkpoints" / "maml_best.pt",
+        script_dir / "checkpoints" / "maml_best.pt",
+    ]
+    possible_robust_paths = [
+        "checkpoints/robust_best.pt",
+        "../checkpoints/robust_best.pt",
+        script_dir.parent / "checkpoints" / "robust_best.pt",
+        script_dir / "checkpoints" / "robust_best.pt",
+    ]
+
+    # Find existing paths
+    meta_path = None
+    for p in possible_meta_paths:
+        if os.path.exists(p):
+            meta_path = str(p)
+            break
+
+    robust_path = None
+    for p in possible_robust_paths:
+        if os.path.exists(p):
+            robust_path = str(p)
+            break
 
     # Check if models exist
-    if not os.path.exists(meta_path):
-        print(f"ERROR: Meta-policy not found at {meta_path}")
-        print("Please train the meta-policy first using experiments/train_meta.py")
+    if meta_path is None:
+        print(f"ERROR: Meta-policy not found. Searched in:")
+        for p in possible_meta_paths:
+            print(f"  - {p}")
+        print("\nPlease train the meta-policy first using:")
+        print("  python experiments/train_meta.py")
         sys.exit(1)
 
-    if not os.path.exists(robust_path):
-        print(f"ERROR: Robust policy not found at {robust_path}")
-        print("Please train the robust policy first using experiments/train_robust.py")
+    if robust_path is None:
+        print(f"ERROR: Robust policy not found. Searched in:")
+        for p in possible_robust_paths:
+            print(f"  - {p}")
+        print("\nPlease train the robust policy first using:")
+        print("  python experiments/train_robust.py")
         sys.exit(1)
+
+    print(f"Using meta policy: {meta_path}")
+    print(f"Using robust policy: {robust_path}")
 
     # Run experiment
     results = run_gap_vs_k_experiment(
