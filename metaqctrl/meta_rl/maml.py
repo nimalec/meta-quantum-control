@@ -427,7 +427,13 @@ class MAML:
             **kwargs
         }
         torch.save(checkpoint, path)
+
+        # ALSO save just the policy weights for easy loading in experiments
+        policy_only_path = path.replace('.pt', '_policy.pt')
+        torch.save(self.policy.state_dict(), policy_only_path)
+
         print(f"Checkpoint saved to {path}")
+        print(f"Policy weights saved to {policy_only_path}")
     
     def load_checkpoint(self, path: str) -> int:
         ##Load a check point ofr an epoch 

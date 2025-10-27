@@ -202,13 +202,20 @@ class RobustPolicy:
     
     def save(self, path: str):
         """Save robust policy."""
-        torch.save({
+        checkpoint = {
             'policy_state_dict': self.policy.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'robust_type': self.robust_type,
             'train_losses': self.train_losses
-        }, path)
+        }
+        torch.save(checkpoint, path)
+
+        # ALSO save just the policy weights for easy loading in experiments
+        policy_only_path = path.replace('.pt', '_policy.pt')
+        torch.save(self.policy.state_dict(), policy_only_path)
+
         print(f"Robust policy saved to {path}")
+        print(f"Policy weights saved to {policy_only_path}")
     
     def load(self, path: str):
         """Load robust policy."""

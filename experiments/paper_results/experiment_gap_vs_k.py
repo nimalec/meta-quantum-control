@@ -73,7 +73,12 @@ def run_gap_vs_k_experiment(
         n_segments=config['n_segments'],
         n_controls=config['n_controls']
     )
-    meta_policy_template.load_state_dict(torch.load(meta_policy_path))
+    # Load from checkpoint or policy-only file
+    meta_checkpoint = torch.load(meta_policy_path, map_location='cpu')
+    if isinstance(meta_checkpoint, dict) and 'policy_state_dict' in meta_checkpoint:
+        meta_policy_template.load_state_dict(meta_checkpoint['policy_state_dict'])
+    else:
+        meta_policy_template.load_state_dict(meta_checkpoint)
     meta_policy_template.eval()
 
     robust_policy = PulsePolicy(
@@ -83,7 +88,12 @@ def run_gap_vs_k_experiment(
         n_segments=config['n_segments'],
         n_controls=config['n_controls']
     )
-    robust_policy.load_state_dict(torch.load(robust_policy_path))
+    # Load from checkpoint or policy-only file
+    robust_checkpoint = torch.load(robust_policy_path, map_location='cpu')
+    if isinstance(robust_checkpoint, dict) and 'policy_state_dict' in robust_checkpoint:
+        robust_policy.load_state_dict(robust_checkpoint['policy_state_dict'])
+    else:
+        robust_policy.load_state_dict(robust_checkpoint)
     robust_policy.eval()
 
     # Create quantum environment
