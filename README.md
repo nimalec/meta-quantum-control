@@ -222,7 +222,6 @@ uv add <package>
 @inproceedings{leclerc2025meta,
   title={Meta-Reinforcement Learning for Quantum Control},
   author={Leclerc, Nima; Brawand, Nicholas},
-  booktitle={ICML},
   year={2025}
 }
 ```
