@@ -120,6 +120,9 @@ def main(args):
     print(f"Robust policy path: {args.robust_path}")
     print(f"Output directory:   {args.output_dir}")
     print(f"Number of tasks:    {args.n_tasks}")
+    print(f"GRAPE baseline:     {'Enabled' if args.include_grape else 'Disabled'}")
+    if args.include_grape:
+        print(f"GRAPE iterations:   {args.grape_iterations}")
     print()
 
     # Configuration
@@ -153,7 +156,9 @@ def main(args):
         config=config,
         k_values=[1, 2, 3, 5, 7, 10, 15, 20],
         n_test_tasks=args.n_tasks,
-        output_dir=f"{args.output_dir}/gap_vs_k"
+        output_dir=f"{args.output_dir}/gap_vs_k",
+        include_grape=args.include_grape,
+        grape_iterations=args.grape_iterations
     )
 
     plot_gap_vs_k(results_gap_k, f"{args.output_dir}/gap_vs_k/figure.pdf")
@@ -174,7 +179,9 @@ def main(args):
         variance_levels=[0.001, 0.002, 0.004, 0.008, 0.016],
         K_fixed=5,
         n_test_tasks=args.n_tasks,
-        output_dir=f"{args.output_dir}/gap_vs_variance"
+        output_dir=f"{args.output_dir}/gap_vs_variance",
+        include_grape=args.include_grape,
+        grape_iterations=args.grape_iterations
     )
 
     plot_gap_vs_variance(results_gap_var, f"{args.output_dir}/gap_vs_variance/figure.pdf")
@@ -292,6 +299,27 @@ if __name__ == "__main__":
         type=int,
         default=100,
         help="Number of test tasks per experiment"
+    )
+
+    parser.add_argument(
+        "--include_grape",
+        action="store_true",
+        default=True,
+        help="Include GRAPE baseline in experiments (default: True)"
+    )
+
+    parser.add_argument(
+        "--no_grape",
+        action="store_false",
+        dest="include_grape",
+        help="Disable GRAPE baseline"
+    )
+
+    parser.add_argument(
+        "--grape_iterations",
+        type=int,
+        default=100,
+        help="Number of GRAPE optimization iterations per task (default: 100)"
     )
 
     args = parser.parse_args()

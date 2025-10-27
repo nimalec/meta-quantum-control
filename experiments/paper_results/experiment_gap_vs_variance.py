@@ -26,7 +26,7 @@ from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters, PS
 from metaqctrl.quantum.gates import state_fidelity
 from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.meta_rl.maml import MAML
-from metaqctrl.baselines.robust_control import RobustPolicy
+from metaqctrl.baselines.robust_control import RobustPolicy, GRAPEOptimizer
 from metaqctrl.theory.quantum_environment import create_quantum_environment
 from metaqctrl.theory.optimality_gap import OptimalityGapComputer, GapConstants
 from metaqctrl.theory.physics_constants import compute_control_relevant_variance
@@ -89,10 +89,16 @@ def run_gap_vs_variance_experiment(
     variance_levels: List[float] = [0.001, 0.002, 0.004, 0.008, 0.016],
     K_fixed: int = 5,
     n_test_tasks: int = 100,
-    output_dir: str = "results/gap_vs_variance"
+    output_dir: str = "results/gap_vs_variance",
+    include_grape: bool = True,
+    grape_iterations: int = 100
 ) -> Dict:
     """
     Main experiment: measure optimality gap as function of task variance σ²_S
+
+    Args:
+        include_grape: Whether to include GRAPE baseline comparison
+        grape_iterations: Number of GRAPE optimization iterations per task
 
     Returns:
         results: Dictionary containing gaps, variances, and validation metrics
@@ -138,11 +144,12 @@ def run_gap_vs_variance_experiment(
     )
 
     # Measure gap for each variance level
-    print(f"\n[4/6] Computing gaps for different variances (K={K_fixed})...")
+    print(f"\n[4/7] Computing gaps for different variances (K={K_fixed})...")
     variances_computed = []
     gaps_mean = []
     gaps_std = []
     gaps_all = []
+    grape_fidelities_all = [] if include_grape else None
 
     for idx, (task_dist, var_target) in enumerate(task_dists):
         print(f"\n  Variance level {idx+1}/{len(task_dists)} (target: {var_target:.5f}):")
@@ -157,6 +164,7 @@ def run_gap_vs_variance_experiment(
 
         fidelities_meta = []
         fidelities_robust = []
+        fidelities_grape = []
 
         for i, task in enumerate(test_tasks):
             if i % 20 == 0:
@@ -201,6 +209,29 @@ def run_gap_vs_variance_experiment(
             fid_meta = env.compute_fidelity(controls_meta, task)
             fidelities_meta.append(fid_meta)
 
+            # GRAPE baseline (if enabled)
+            if include_grape:
+                grape = GRAPEOptimizer(
+                    n_segments=config['n_segments'],
+                    n_controls=config['n_controls'],
+                    T=config.get('horizon', 1.0),
+                    learning_rate=0.1,
+                    method='adam',
+                    device=torch.device('cpu')
+                )
+
+                def simulate_fn(controls_np, task_params):
+                    return env.compute_fidelity(controls_np, task_params)
+
+                optimal_controls = grape.optimize(
+                    simulate_fn=simulate_fn,
+                    task_params=task,
+                    max_iterations=grape_iterations,
+                    verbose=False
+                )
+                fid_grape = env.compute_fidelity(optimal_controls, task)
+                fidelities_grape.append(fid_grape)
+
         # Compute gap for this variance level
         gap_tasks = np.array(fidelities_meta) - np.array(fidelities_robust)
         gap_mean = np.mean(gap_tasks)
@@ -210,10 +241,20 @@ def run_gap_vs_variance_experiment(
         gaps_std.append(gap_std)
         gaps_all.append(gap_tasks.tolist())
 
-        print(f"    Gap = {gap_mean:.4f} ± {gap_std:.4f}")
+        if include_grape:
+            grape_mean = np.mean(fidelities_grape)
+            grape_std = np.std(fidelities_grape) / np.sqrt(n_test_tasks)
+            grape_fidelities_all.append({
+                'mean': float(grape_mean),
+                'std': float(grape_std),
+                'values': fidelities_grape
+            })
+            print(f"    Gap = {gap_mean:.4f} ± {gap_std:.4f}, GRAPE = {grape_mean:.4f} ± {grape_std:.4f}")
+        else:
+            print(f"    Gap = {gap_mean:.4f} ± {gap_std:.4f}")
 
     # Fit theoretical model
-    print("\n[5/6] Fitting theoretical model...")
+    print("\n[5/7] Fitting theoretical model...")
     variances_array = np.array(variances_computed)
     gaps_array = np.array(gaps_mean)
 
@@ -244,7 +285,7 @@ def run_gap_vs_variance_experiment(
         fit_success = False
 
     # Save results
-    print(f"\n[6/6] Saving results to {output_dir}...")
+    print(f"\n[6/7] Saving results to {output_dir}...")
     results = {
         'variances': variances_computed,
         'gaps_mean': gaps_mean,
@@ -255,6 +296,11 @@ def run_gap_vs_variance_experiment(
             'success': fit_success,
             'slope': float(slope_fit) if fit_success else None,
             'r2': float(r2) if fit_success else None
+        },
+        'grape': {
+            'included': include_grape,
+            'fidelities_per_variance': grape_fidelities_all if include_grape else [],
+            'iterations': grape_iterations if include_grape else None
         },
         'config': config,
         'n_test_tasks': n_test_tasks
@@ -271,19 +317,19 @@ def run_gap_vs_variance_experiment(
 
 
 def plot_gap_vs_variance(results: Dict, output_path: str = "results/gap_vs_variance/figure.pdf"):
-    """Generate publication-quality figure"""
+    """Generate publication-quality figure with GRAPE baseline"""
     sns.set_style("whitegrid")
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(10, 6))
 
     variances = np.array(results['variances'])
     gaps_mean = np.array(results['gaps_mean'])
     gaps_std = np.array(results['gaps_std'])
 
-    # Plot empirical data
+    # Plot empirical gap data
     ax.errorbar(
         variances, gaps_mean, yerr=gaps_std,
         fmt='o', markersize=10, capsize=5, capthick=2,
-        label=f'Empirical Gap (K={results["K_fixed"]})',
+        label=f'MAML Gap (K={results["K_fixed"]})',
         color='steelblue', linewidth=2
     )
 
@@ -298,12 +344,23 @@ def plot_gap_vs_variance(results: Dict, output_path: str = "results/gap_vs_varia
             color='darkred', linewidth=2
         )
 
+    # Plot GRAPE baseline per variance level
+    if results['grape']['included']:
+        grape_means = [d['mean'] for d in results['grape']['fidelities_per_variance']]
+        grape_stds = [d['std'] for d in results['grape']['fidelities_per_variance']]
+        ax.errorbar(
+            variances, grape_means, yerr=grape_stds,
+            fmt='s', markersize=8, capsize=4, capthick=2,
+            label='GRAPE Baseline',
+            color='green', linewidth=2, alpha=0.7
+        )
+
     ax.set_xlabel('Control-Relevant Task Variance ($\\sigma^2_S$)',
                    fontsize=14, fontweight='bold')
-    ax.set_ylabel('Optimality Gap (Fidelity)', fontsize=14, fontweight='bold')
-    ax.set_title('Meta-Learning Gap vs Task Diversity',
+    ax.set_ylabel('Fidelity / Optimality Gap', fontsize=14, fontweight='bold')
+    ax.set_title('Meta-Learning Gap vs Task Diversity (with GRAPE Baseline)',
                   fontsize=16, fontweight='bold')
-    ax.legend(fontsize=12, loc='upper left')
+    ax.legend(fontsize=11, loc='upper left')
     ax.grid(True, alpha=0.3)
     ax.tick_params(labelsize=12)
 

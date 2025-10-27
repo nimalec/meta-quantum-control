@@ -1,0 +1,230 @@
+================================================================================
+QUICK REFERENCE: ROBUST EXPERIMENTS & OPTIMIZATION METHODS
+================================================================================
+
+KEY FILES AT A GLANCE:
+
+1. ROBUST EXPERIMENTS
+   Location: /experiments/
+   
+   train_meta.py                  Main MAML training (calls helpers from train_meta imports)
+   train_robust.py                Robust baseline training
+   paper_results/                 Paper figure generation pipeline
+   └─ generate_all_results.py     MASTER orchestration script
+   
+2. OPTIMIZATION METHODS
+   Location: /metaqctrl/baselines/robust_control.py
+   
+   Lines 26-323:    RobustPolicy & RobustTrainer (MAML baseline comparison)
+   Lines 326-385:   H2RobustControl (classical optimal control)
+   Lines 388-432:   DomainRandomization (data augmentation baseline)
+   Lines 435-735:   GRAPEOptimizer (gradient-based pulse engineering)
+   
+3. CORE COMPONENTS
+   
+   meta_rl/maml.py              Meta-learning algorithm (inner/outer loops)
+   meta_rl/policy.py            PulsePolicy neural network
+   theory/optimality_gap.py     Gap computation & theory validation
+   theory/quantum_environment.py Unified simulation interface
+   quantum/lindblad.py          Physics simulator
+   quantum/noise_models.py      Task distributions
+
+================================================================================
+PAPER RESULTS WORKFLOW
+================================================================================
+
+STEP 1: Train Models
+   python experiments/train_meta.py --config configs/experiment_config.yaml
+   python experiments/train_robust.py --config configs/experiment_config.yaml
+   
+STEP 2: Generate Paper Figures & Tables
+   python experiments/paper_results/generate_all_results.py \
+       --meta_path checkpoints/maml_best.pt \
+       --robust_path checkpoints/robust_best.pt \
+       --output_dir results/paper \
+       --n_tasks 100
+
+STEP 3: Output
+   results/paper/
+   ├─ gap_vs_k/
+   │  ├─ figure.pdf              (Figure 1: exponential fit, R² ≈ 0.96)
+   │  └─ results.json            (Raw data)
+   ├─ gap_vs_variance/
+   │  ├─ figure.pdf              (Figure 2: linear fit, R² ≈ 0.94)
+   │  └─ results.json
+   ├─ constants_validation/
+   │  ├─ constants_visualization.pdf  (Table 1: constants)
+   │  └─ constants.json
+   └─ summary_table.txt          (Complete results summary)
+
+================================================================================
+OPTIMIZATION METHODS COMPARISON
+================================================================================
+
+┌─────────────────┬──────────────────────┬────────────┬───────────────┐
+│ Method          │ Location             │ Adaptation │ Key Property  │
+├─────────────────┼──────────────────────┼────────────┼───────────────┤
+│ MAML            │ meta_rl/maml.py      │ K steps    │ Meta-learned  │
+│ Robust Average  │ baselines:90-113     │ None       │ E[L]          │
+│ Robust Minimax  │ baselines:115-144    │ None       │ max_θ L       │
+│ Robust CVaR     │ baselines:146-176    │ None       │ Top-α worst   │
+│ GRAPE Single    │ baselines:492-586    │ None       │ Direct pulse  │
+│ GRAPE Robust    │ baselines:635-718    │ None       │ Multi-task    │
+│ Domain Random   │ baselines:388-432    │ None       │ Augmentation  │
+│ H2/H∞ Control   │ baselines:326-385    │ None       │ Classical     │
+└─────────────────┴──────────────────────┴────────────┴───────────────┘
+
+PAPER USES: MAML (main) vs Robust Minimax (baseline)
+
+================================================================================
+CONFIGURATION PARAMETERS
+================================================================================
+
+System:
+  psd_model: 'one_over_f'        Noise type
+  horizon: 1.0                   Evolution time
+  target_gate: 'pauli_x'         Target quantum operation
+
+Task Distribution:
+  alpha_range: [0.5, 2.0]        Spectral exponent bounds
+  A_range: [0.001, 0.01]         PSD amplitude bounds
+  omega_c_range: [2.0, 10.0]     Cutoff frequency bounds
+
+Policy Network:
+  hidden_dim: 128                Network width
+  n_segments: 20                 Pulse discretization
+  n_controls: 2                  Control channels (X, Y)
+  output_scale: 2.0              Control magnitude scale
+
+MAML Training:
+  inner_lr: 0.01                 Adaptation learning rate
+  inner_steps: 1                 K (steps per task)
+  meta_lr: 0.01                  Meta-learning rate
+  first_order: true              Use FOMAML (stable)
+
+Robust Training:
+  robust_type: 'minimax'         Options: average, minimax, cvar
+  robust_iterations: 1000        Training iterations
+  robust_tasks_per_batch: 16     Batch size
+
+================================================================================
+ROBUST TYPE SELECTION
+================================================================================
+
+Average Robust:
+  Loss = E_θ[L(π, θ)]
+  Use when: Want good average performance
+  
+Minimax Robust (DEFAULT):
+  Loss = max_θ L(π, θ) (via LogSumExp smoothing)
+  Use when: Want worst-case guarantees
+  
+CVaR Robust:
+  Loss = E[worst α% of losses]
+  Use when: Balance average & worst-case (here α=0.1)
+
+Selected in config via:
+  robust_type: 'minimax'  # in experiment_config.yaml
+
+================================================================================
+EXPERIMENT DETAILS
+================================================================================
+
+Experiment 1: Gap vs Adaptation Steps K
+  File: experiment_gap_vs_k.py
+  K values: [1, 2, 3, 5, 7, 10, 15, 20]
+  Theory: Gap(K) = gap_max * (1 - exp(-μηK))
+  Target: R² ≈ 0.96 for exponential fit
+  
+Experiment 2: Gap vs Task Variance σ²_S
+  File: experiment_gap_vs_variance.py
+  Variance levels: [0.001, 0.002, 0.004, 0.008, 0.016]
+  Fixed K: 5
+  Theory: Gap(σ²_S) ∝ σ²_S
+  Target: R² ≈ 0.94 for linear fit
+  
+Experiment 3: Constants Validation
+  File: experiment_constants_validation.py
+  Estimates: C_sep, μ, L, L_F, c_quantum
+  Validates: Theory vs empirical (0.5-2.0× ratio bounds)
+  
+Experiment 4: System Scaling
+  File: experiment_system_scaling.py
+  Tests: Performance on multi-qubit systems
+
+================================================================================
+GRAPE BASELINE INTEGRATION
+================================================================================
+
+Already Implemented:
+  Location: metaqctrl/baselines/robust_control.py (lines 435-735)
+  Example: examples/grape_example.py
+  
+To Add to Paper Results:
+
+Option A: Dedicated Experiment File
+  Create: experiments/paper_results/experiment_grape_baseline.py
+  Call from: generate_all_results.py
+  
+Option B: Add to Existing Figures
+  Modify: experiment_gap_vs_k.py
+  Add: GRAPE fidelity curves alongside MAML & Robust
+  
+Required Simulator Function:
+  def simulate_fidelity(controls, task_params):
+      L_ops = psd_to_lindblad.get_lindblad_operators(task_params)
+      sim = LindbladSimulator(H0, H_controls, L_ops)
+      rho_final, _ = sim.evolve(rho0, controls, T=horizon)
+      return state_fidelity(rho_final, target_state)
+
+Usage Example:
+  grape = GRAPEOptimizer(n_segments=20, n_controls=2)
+  optimal_controls = grape.optimize(
+      simulate_fn=simulate_fidelity,
+      task_params=task_params,
+      max_iterations=100
+  )
+
+================================================================================
+KEY CODE SNIPPETS
+================================================================================
+
+Loading Trained Models:
+  meta_policy = PulsePolicy(...)
+  meta_policy.load_state_dict(torch.load('checkpoints/maml_best.pt'))
+  
+Creating Quantum Environment:
+  env = QuantumEnvironment(H0, H_controls, psd_to_lindblad, target_state, T=1.0)
+  
+Computing Gap:
+  gap_computer = OptimalityGapComputer(env, fidelity_fn)
+  gaps = gap_computer.compute_gap(meta_policy, robust_policy, test_tasks, K=5)
+  
+Task Sampling (3-way split):
+  train_tasks = task_dist.sample(100, rng)  # seed_offset=0
+  val_tasks = task_dist.sample(50, rng)     # seed_offset=100000
+  test_tasks = task_dist.sample(100, rng)   # seed_offset=200000
+
+================================================================================
+DEBUGGING & COMMON ISSUES
+================================================================================
+
+No Differentiable Gradients:
+  Problem: GRAPE uses finite differences, not autodiff
+  Solution: Already implemented correctly for non-diff simulators
+  
+Task Variance Mismatch:
+  Problem: Variance levels don't match theory
+  Solution: Adjust alpha_range, A_range, omega_c_range in config
+  
+Model Checkpoint Issues:
+  Problem: Can't load trained models
+  Solution: Check paths exist: checkpoints/maml_best.pt, robust_best.pt
+  
+R² Below Target:
+  Problem: Gap vs K fit gives R² < 0.90
+  Solution: Increase n_test_tasks (100 minimum recommended)
+
+================================================================================
+END QUICK REFERENCE
+================================================================================
