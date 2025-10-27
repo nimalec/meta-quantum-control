@@ -106,16 +106,20 @@ def run_gap_vs_variance_experiment(
     # Load trained policies
     print("\n[1/6] Loading trained policies...")
     meta_policy_template = PulsePolicy(
-        input_dim=3,
-        output_dim=config['num_segments'] * config['num_controls'],
-        hidden_dims=config['policy_hidden_dims']
+        task_feature_dim=3,
+        hidden_dim=config['policy_hidden_dims'][0],
+        n_hidden_layers=len(config['policy_hidden_dims']) - 1,
+        n_segments=config['num_segments'],
+        n_controls=config['num_controls']
     )
     meta_policy_template.load_state_dict(torch.load(meta_policy_path))
 
     robust_policy = PulsePolicy(
-        input_dim=3,
-        output_dim=config['num_segments'] * config['num_controls'],
-        hidden_dims=config['policy_hidden_dims']
+        task_feature_dim=3,
+        hidden_dim=config['policy_hidden_dims'][0],
+        n_hidden_layers=len(config['policy_hidden_dims']) - 1,
+        n_segments=config['num_segments'],
+        n_controls=config['num_controls']
     )
     robust_policy.load_state_dict(torch.load(robust_policy_path))
     robust_policy.eval()
@@ -123,7 +127,9 @@ def run_gap_vs_variance_experiment(
     # Create quantum environment
     print("\n[2/6] Creating quantum environment...")
     # target_state will be created from config['target_gate']
-    env = create_quantum_environment(config)
+    from metaqctrl.theory.quantum_environment import get_target_state_from_config
+    target_state = get_target_state_from_config(config)
+    env = create_quantum_environment(config, target_state)
 
     # Create task distributions with varying variance
     print(f"\n[3/6] Creating {len(variance_levels)} task distributions...")
@@ -162,10 +168,8 @@ def run_gap_vs_variance_experiment(
             )
 
             # Robust policy (no adaptation)
-            controls_robust = robust_policy(task_features).detach().numpy()
-            controls_robust = controls_robust.reshape(
-                config['num_segments'], config['num_controls']
-            )
+            with torch.no_grad():
+                controls_robust = robust_policy(task_features).detach().numpy()
             fid_robust = env.compute_fidelity(controls_robust, task)
             fidelities_robust.append(fid_robust)
 
@@ -178,7 +182,7 @@ def run_gap_vs_variance_experiment(
             for k in range(K_fixed):
                 # Compute loss with gradients
                 loss = env.compute_loss_differentiable(
-                    adapted_policy, task_features, task
+                    adapted_policy, task
                 )
 
                 # Gradient step
@@ -191,10 +195,8 @@ def run_gap_vs_variance_experiment(
 
             # Evaluate adapted policy
             adapted_policy.eval()
-            controls_meta = adapted_policy(task_features).detach().numpy()
-            controls_meta = controls_meta.reshape(
-                config['num_segments'], config['num_controls']
-            )
+            with torch.no_grad():
+                controls_meta = adapted_policy(task_features).detach().numpy()
             fid_meta = env.compute_fidelity(controls_meta, task)
             fidelities_meta.append(fid_meta)
 

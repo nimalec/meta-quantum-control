@@ -50,13 +50,13 @@ def main(config_path: str):
     # Create quantum system
     print("Setting up quantum system...")
     quantum_system = create_quantum_system(config)
-    
+
     # Create task distribution
     print("Creating task distribution...")
     task_dist = create_task_distribution(config)
     variance = task_dist.compute_variance()
     print(f"  Task variance σ²_θ = {variance:.4f}\n")
-    
+
     # Target gate
     target_gate_name = config.get('target_gate', 'hadamard')
     if target_gate_name == 'hadamard':
@@ -65,10 +65,21 @@ def main(config_path: str):
         U_target = TargetGates.pauli_x()
     else:
         raise ValueError(f"Unknown target gate: {target_gate_name}")
-    
+
     ket_0 = np.array([1, 0], dtype=complex)
     target_state = np.outer(U_target @ ket_0, (U_target @ ket_0).conj())
     print(f"Target gate: {target_gate_name}")
+
+    # Create quantum environment
+    from metaqctrl.theory.quantum_environment import QuantumEnvironment
+    env = QuantumEnvironment(
+        H0=quantum_system['H0'],
+        H_controls=quantum_system['H_controls'],
+        psd_to_lindblad=quantum_system['psd_to_lindblad'],
+        target_state=target_state,
+        T=config.get('horizon', 1.0),
+        method=config.get('integration_method', 'RK45')
+    )
     
     # Create policy
     print("\nCreating policy network...")
@@ -96,7 +107,7 @@ def main(config_path: str):
     print(f"  Robust type: {robust_type}")
     
     # Create loss function
-    loss_fn = create_loss_function(config, target_state)
+    loss_fn = create_loss_function(env, device)
     
     # Create trainer
     print("\nSetting up trainer...")

@@ -48,9 +48,11 @@ def load_policy_from_checkpoint(
         Loaded policy model
     """
     policy = PulsePolicy(
-        input_dim=input_dim,
-        output_dim=output_dim,
-        hidden_dims=hidden_dims
+        task_feature_dim=input_dim,
+        hidden_dim=hidden_dims[0] if hidden_dims else 128,
+        n_hidden_layers=len(hidden_dims) - 1 if hidden_dims else 2,
+        n_segments=output_dim // 2,  # Assuming 2 controls
+        n_controls=2
     ).to(device)
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
@@ -120,7 +122,6 @@ def evaluate_fidelity_vs_k(
         # Pre-adaptation fidelity
         with torch.no_grad():
             controls_pre = policy(task_features).cpu().numpy()
-            controls_pre = controls_pre.reshape(env.n_seg, env.num_controls)
 
         fid_pre = env.compute_fidelity(controls_pre, task)
         results['pre_adapt_fidelities'].append(fid_pre)
@@ -147,7 +148,6 @@ def evaluate_fidelity_vs_k(
             adapted_policy.eval()
             with torch.no_grad():
                 controls_post = adapted_policy(task_features).cpu().numpy()
-                controls_post = controls_post.reshape(env.n_seg, env.num_controls)
 
             fid_post = env.compute_fidelity(controls_post, task)
             results['post_adapt_fidelities'][K].append(fid_post)
