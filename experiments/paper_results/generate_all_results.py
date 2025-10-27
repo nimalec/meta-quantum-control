@@ -125,20 +125,19 @@ def main(args):
         print(f"GRAPE iterations:   {args.grape_iterations}")
     print()
 
-    # Configuration
+    # Configuration (use consistent key names with train_meta.py)
     config = {
         'num_qubits': 1,
-        'num_controls': 2,
-        'num_segments': 20,
-        'evolution_time': 1.0,
+        'n_controls': 2,  # Changed from 'num_controls'
+        'n_segments': 20,  # Changed from 'num_segments'
+        'horizon': 1.0,  # Changed from 'evolution_time'
         'target_gate': 'hadamard',
-        'policy_hidden_dims': [128, 128, 128],
+        'hidden_dim': 128,  # Changed from 'policy_hidden_dims'
+        'n_hidden_layers': 2,
         'inner_lr': 0.01,
-        'task_dist': {
-            'alpha_range': [0.5, 2.0],
-            'A_range': [0.05, 0.3],
-            'omega_c_range': [2.0, 8.0]
-        },
+        'alpha_range': [0.5, 2.0],  # Flattened from 'task_dist'
+        'A_range': [0.05, 0.3],
+        'omega_c_range': [2.0, 8.0],
         'noise_frequencies': [1.0, 5.0, 10.0]
     }
 
