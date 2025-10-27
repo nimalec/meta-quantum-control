@@ -107,19 +107,19 @@ def run_gap_vs_variance_experiment(
     print("\n[1/6] Loading trained policies...")
     meta_policy_template = PulsePolicy(
         task_feature_dim=3,
-        hidden_dim=config['policy_hidden_dims'][0],
-        n_hidden_layers=len(config['policy_hidden_dims']) - 1,
-        n_segments=config['num_segments'],
-        n_controls=config['num_controls']
+        hidden_dim=config['hidden_dim'],
+        n_hidden_layers=config['n_hidden_layers'],
+        n_segments=config['n_segments'],
+        n_controls=config['n_controls']
     )
     meta_policy_template.load_state_dict(torch.load(meta_policy_path))
 
     robust_policy = PulsePolicy(
         task_feature_dim=3,
-        hidden_dim=config['policy_hidden_dims'][0],
-        n_hidden_layers=len(config['policy_hidden_dims']) - 1,
-        n_segments=config['num_segments'],
-        n_controls=config['num_controls']
+        hidden_dim=config['hidden_dim'],
+        n_hidden_layers=config['n_hidden_layers'],
+        n_segments=config['n_segments'],
+        n_controls=config['n_controls']
     )
     robust_policy.load_state_dict(torch.load(robust_policy_path))
     robust_policy.eval()
@@ -181,8 +181,9 @@ def run_gap_vs_variance_experiment(
 
             for k in range(K_fixed):
                 # Compute loss with gradients
+                # FIXED: Pass device parameter explicitly
                 loss = env.compute_loss_differentiable(
-                    adapted_policy, task
+                    adapted_policy, task, device=torch.device('cpu')
                 )
 
                 # Gradient step
@@ -316,17 +317,16 @@ if __name__ == "__main__":
     # Configuration matching paper Section 5
     config = {
         'num_qubits': 1,
-        'num_controls': 2,
-        'num_segments': 20,
-        'evolution_time': 1.0,
+        'n_controls': 2,
+        'n_segments': 20,
+        'horizon': 1.0,
         'target_gate': 'hadamard',
-        'policy_hidden_dims': [128, 128, 128],
+        'hidden_dim': 128,
+        'n_hidden_layers': 2,
         'inner_lr': 0.01,
-        'task_dist': {
-            'alpha_range': [0.5, 2.0],
-            'A_range': [0.05, 0.3],
-            'omega_c_range': [2.0, 8.0]
-        },
+        'alpha_range': [0.5, 2.0],
+        'A_range': [0.05, 0.3],
+        'omega_c_range': [2.0, 8.0],
         'noise_frequencies': [1.0, 5.0, 10.0]
     }
 

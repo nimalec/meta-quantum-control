@@ -138,8 +138,9 @@ def evaluate_fidelity_vs_k(
             # K adaptation steps
             for _ in range(K):
                 optimizer.zero_grad()
+                # FIXED: Pass task (NoiseParameters) not task_features (tensor)
                 loss = env.compute_loss_differentiable(
-                    adapted_policy, task_features, task
+                    adapted_policy, task, device=device
                 )
                 loss.backward()
                 optimizer.step()
@@ -465,8 +466,8 @@ def main():
     policy = load_policy_from_checkpoint(
         checkpoint_path=args.checkpoint,
         input_dim=3,
-        output_dim=config['num_segments'] * config['num_controls'],
-        hidden_dims=config['policy_hidden_dims'],
+        output_dim=config['n_segments'] * config['n_controls'],
+        hidden_dims=[config['hidden_dim']] * (config['n_hidden_layers'] + 1),
         device=device
     )
 
@@ -484,9 +485,9 @@ def main():
     task_dist = TaskDistribution(
         dist_type=config.get('task_dist_type', 'uniform'),
         ranges={
-            'alpha': tuple(config.get('alpha_range', [0.5, 2.0])),
-            'A': tuple(config.get('A_range', [0.05, 0.3])),
-            'omega_c': tuple(config.get('omega_c_range', [2.0, 8.0]))
+            'alpha': tuple(config['alpha_range']),
+            'A': tuple(config['A_range']),
+            'omega_c': tuple(config['omega_c_range'])
         }
     )
     test_tasks = task_dist.sample(args.n_tasks)
