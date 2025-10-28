@@ -25,51 +25,7 @@ from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters
 from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.theory.quantum_environment import create_quantum_environment
 from metaqctrl.quantum.gates import TargetGates
-
-
-def load_policy_from_checkpoint(
-    checkpoint_path: str,
-    input_dim: int,
-    output_dim: int,
-    hidden_dims: List[int],
-    device: torch.device = torch.device('cpu')
-) -> PulsePolicy:
-    """
-    Load trained policy from checkpoint.
-
-    Args:
-        checkpoint_path: Path to .pt checkpoint file
-        input_dim: Policy input dimension
-        output_dim: Policy output dimension
-        hidden_dims: Hidden layer dimensions
-        device: Torch device
-
-    Returns:
-        Loaded policy model
-    """
-    policy = PulsePolicy(
-        task_feature_dim=input_dim,
-        hidden_dim=hidden_dims[0] if hidden_dims else 128,
-        n_hidden_layers=len(hidden_dims) - 1 if hidden_dims else 2,
-        n_segments=output_dim // 2,  # Assuming 2 controls
-        n_controls=2
-    ).to(device)
-
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-
-    # Handle different checkpoint formats
-    if 'model_state_dict' in checkpoint:
-        policy.load_state_dict(checkpoint['model_state_dict'])
-    elif 'policy_state_dict' in checkpoint:
-        policy.load_state_dict(checkpoint['policy_state_dict'])
-    else:
-        # Assume checkpoint is the state dict itself
-        policy.load_state_dict(checkpoint)
-
-    policy.eval()
-    print(f"Loaded policy from {checkpoint_path}")
-
-    return policy
+from metaqctrl.utils.checkpoint_utils import load_policy_from_checkpoint as load_policy_auto
 
 
 def evaluate_fidelity_vs_k(

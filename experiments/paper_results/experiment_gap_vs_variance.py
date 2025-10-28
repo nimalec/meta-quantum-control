@@ -30,6 +30,7 @@ from metaqctrl.baselines.robust_control import RobustPolicy, GRAPEOptimizer
 from metaqctrl.theory.quantum_environment import create_quantum_environment
 from metaqctrl.theory.optimality_gap import OptimalityGapComputer, GapConstants
 from metaqctrl.theory.physics_constants import compute_control_relevant_variance
+from metaqctrl.utils.checkpoint_utils import load_policy_from_checkpoint
 
 
 def linear_model(sigma2_S, slope):
@@ -111,34 +112,18 @@ def run_gap_vs_variance_experiment(
 
     # Load trained policies
     print("\n[1/6] Loading trained policies...")
-    meta_policy_template = PulsePolicy(
-        task_feature_dim=3,
-        hidden_dim=config['hidden_dim'],
-        n_hidden_layers=config['n_hidden_layers'],
-        n_segments=config['n_segments'],
-        n_controls=config['n_controls']
-    )
-    # Load from checkpoint or policy-only file
-    meta_checkpoint = torch.load(meta_policy_path, map_location='cpu')
-    if isinstance(meta_checkpoint, dict) and 'policy_state_dict' in meta_checkpoint:
-        meta_policy_template.load_state_dict(meta_checkpoint['policy_state_dict'])
-    else:
-        meta_policy_template.load_state_dict(meta_checkpoint)
 
-    robust_policy = PulsePolicy(
-        task_feature_dim=3,
-        hidden_dim=config['hidden_dim'],
-        n_hidden_layers=config['n_hidden_layers'],
-        n_segments=config['n_segments'],
-        n_controls=config['n_controls']
+    # Load meta policy with automatic architecture detection
+    print("\nLoading meta policy...")
+    meta_policy_template = load_policy_from_checkpoint(
+        meta_policy_path, config, eval_mode=False, verbose=True
     )
-    # Load from checkpoint or policy-only file
-    robust_checkpoint = torch.load(robust_policy_path, map_location='cpu')
-    if isinstance(robust_checkpoint, dict) and 'policy_state_dict' in robust_checkpoint:
-        robust_policy.load_state_dict(robust_checkpoint['policy_state_dict'])
-    else:
-        robust_policy.load_state_dict(robust_checkpoint)
-    robust_policy.eval()
+
+    # Load robust policy with automatic architecture detection
+    print("\nLoading robust policy...")
+    robust_policy = load_policy_from_checkpoint(
+        robust_policy_path, config, eval_mode=True, verbose=True
+    )
 
     # Create quantum environment
     print("\n[2/6] Creating quantum environment...")

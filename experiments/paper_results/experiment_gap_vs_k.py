@@ -31,6 +31,7 @@ from metaqctrl.baselines.robust_control import RobustPolicy, GRAPEOptimizer
 from metaqctrl.theory.quantum_environment import create_quantum_environment
 from metaqctrl.theory.optimality_gap import OptimalityGapComputer, GapConstants
 from metaqctrl.theory.physics_constants import estimate_all_constants
+from metaqctrl.utils.checkpoint_utils import load_policy_from_checkpoint
 
 
 def exponential_model(K, gap_max, mu_eta):
@@ -67,45 +68,17 @@ def run_gap_vs_k_experiment(
     # Load trained policies
     print("\n[1/6] Loading trained policies...")
 
-    # Try to infer architecture from checkpoint
-    def load_policy_with_auto_architecture(checkpoint_path, config):
-        """Load policy and automatically detect architecture from checkpoint."""
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
-        state_dict = checkpoint['policy_state_dict'] if isinstance(checkpoint, dict) and 'policy_state_dict' in checkpoint else checkpoint
+    # Load meta policy with automatic architecture detection
+    print("Loading meta policy...")
+    meta_policy_template = load_policy_from_checkpoint(
+        meta_policy_path, config, eval_mode=False, verbose=True
+    )
 
-        # Detect architecture from state dict keys
-        layer_keys = [k for k in state_dict.keys() if 'network' in k and 'weight' in k]
-        max_layer_idx = max([int(k.split('.')[1]) for k in layer_keys])
-
-        # Count hidden layers (exclude input layer 0, activation layers, and output layer)
-        # Architecture: [input(0), act(1), hidden(2), act(3), ..., output(max_layer_idx)]
-        n_hidden_layers = (max_layer_idx - 2) // 2  # Each hidden layer has weight + activation
-
-        # Detect hidden_dim from first layer output shape
-        first_layer_key = 'network.0.weight'
-        if first_layer_key in state_dict:
-            hidden_dim = state_dict[first_layer_key].shape[0]
-        else:
-            hidden_dim = config['hidden_dim']  # fallback
-
-        print(f"    Detected architecture: hidden_dim={hidden_dim}, n_hidden_layers={n_hidden_layers}")
-
-        # Create policy with detected architecture
-        policy = PulsePolicy(
-            task_feature_dim=3,
-            hidden_dim=hidden_dim,
-            n_hidden_layers=n_hidden_layers,
-            n_segments=config['n_segments'],
-            n_controls=config['n_controls']
-        )
-
-        # Load state dict
-        policy.load_state_dict(state_dict)
-        policy.eval()
-        return policy
-
-    meta_policy_template = load_policy_with_auto_architecture(meta_policy_path, config)
-    robust_policy = load_policy_with_auto_architecture(robust_policy_path, config)
+    # Load robust policy with automatic architecture detection
+    print("Loading robust policy...")
+    robust_policy = load_policy_from_checkpoint(
+        robust_policy_path, config, eval_mode=True, verbose=True
+    )
 
     # Create quantum environment
     print("\n[2/6] Creating quantum environment...")

@@ -21,37 +21,27 @@ from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.meta_rl.maml import MAML
 from metaqctrl.baselines.robust_control import RobustPolicy
 from metaqctrl.theory.optimality_gap import OptimalityGapComputer, GapConstants
+from metaqctrl.utils.checkpoint_utils import load_policy_from_checkpoint
 
 # Import system creation from train_meta
 from train_meta import create_quantum_system, create_task_distribution
 
 
 def load_models(meta_path: str, robust_path: str, config: dict, device: torch.device):
-    """Load trained meta and robust policies."""
-    
-    # Create policy architecture
-    policy_config = {
-        'task_feature_dim': config.get('task_feature_dim', 3),
-        'hidden_dim': config.get('hidden_dim', 128),
-        'n_hidden_layers': config.get('n_hidden_layers', 2),
-        'n_segments': config.get('n_segments', 20),
-        'n_controls': config.get('n_controls', 2),
-        'output_scale': config.get('output_scale', 0.5),
-        'activation': config.get('activation', 'tanh')
-    }
-    
-    # Load meta-learned policy
-    meta_policy = PulsePolicy(**policy_config).to(device)
-    meta_checkpoint = torch.load(meta_path, map_location=device)
-    meta_policy.load_state_dict(meta_checkpoint['policy_state_dict'])
+    """Load trained meta and robust policies with automatic architecture detection."""
+
+    # Load meta-learned policy with auto architecture detection
+    meta_policy = load_policy_from_checkpoint(
+        meta_path, config, device=device, eval_mode=True, verbose=True
+    )
     print(f"Loaded meta policy from {meta_path}")
-    
-    # Load robust policy
-    robust_policy = PulsePolicy(**policy_config).to(device)
-    robust_checkpoint = torch.load(robust_path, map_location=device)
-    robust_policy.load_state_dict(robust_checkpoint['policy_state_dict'])
+
+    # Load robust policy with auto architecture detection
+    robust_policy = load_policy_from_checkpoint(
+        robust_path, config, device=device, eval_mode=True, verbose=True
+    )
     print(f"Loaded robust policy from {robust_path}")
-    
+
     return meta_policy, robust_policy
 
 
