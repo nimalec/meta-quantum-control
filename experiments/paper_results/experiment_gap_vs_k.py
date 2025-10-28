@@ -357,13 +357,13 @@ if __name__ == "__main__":
     script_dir = Path(__file__).parent
     possible_meta_paths = [
         "checkpoints/maml_best.pt",
-        "../checkpoints/maml_best.pt",
+        "../checkpoints/maml_20251027_161519_best_policy.pt",
         script_dir.parent / "checkpoints" / "maml_best.pt",
         script_dir / "checkpoints" / "maml_best.pt",
     ]
     possible_robust_paths = [
         "checkpoints/robust_best.pt",
-        "../checkpoints/robust_best.pt",
+        "../checkpoints/robust_minimax_20251027_162238_best_policy.pt",
         script_dir.parent / "checkpoints" / "robust_best.pt",
         script_dir / "checkpoints" / "robust_best.pt",
     ]
@@ -407,8 +407,9 @@ if __name__ == "__main__":
         robust_policy_path=robust_path,
         config=config,
         k_values=[1, 2, 3, 5, 7, 10, 15, 20],
-        n_test_tasks=100,
-        output_dir="results/gap_vs_k"
+        n_test_tasks=2,
+        output_dir="results/gap_vs_k", 
+        include_grape = False
     )
 
     # Generate figure
