@@ -383,8 +383,8 @@ if __name__ == "__main__":
     }
 
     # Paths to trained models
-    meta_path = "checkpoints/maml_best.pt"
-    robust_path = "checkpoints/robust_best.pt"
+    meta_path = "../checkpoints/maml_20251027_161519_best_policy.pt"
+    robust_path = "../checkpoints/robust_minimax_20251027_162238_best_policy.pt" 
 
     # Check if models exist
     if not os.path.exists(meta_path) or not os.path.exists(robust_path):
@@ -399,8 +399,9 @@ if __name__ == "__main__":
         config=config,
         variance_levels=[0.001, 0.002, 0.004, 0.008, 0.016],
         K_fixed=5,
-        n_test_tasks=100,
-        output_dir="results/gap_vs_variance"
+        n_test_tasks=2,
+        output_dir="results/gap_vs_variance",
+        include_grape = False
     )
 
     # Generate figure
