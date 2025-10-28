@@ -45,40 +45,60 @@ def create_task_distributions_with_varying_variance(
     """
     Create task distributions with different variances
 
-    Strategy: vary the width of the parameter ranges to control σ²_S
+    FIXED: Use direct range scaling without clipping to ensure monotonic variance
+
+    Strategy: Scale ranges around center proportionally to variance_scale
+    Small variance → narrow ranges (tasks are similar)
+    Large variance → wide ranges (tasks are diverse)
     """
     distributions = []
 
+    # Base configuration (full ranges from config)
+    alpha_full_range = base_config.get('alpha_range', [0.5, 2.0])
+    A_full_range = base_config.get('A_range', [0.05, 0.3])
+    omega_c_full_range = base_config.get('omega_c_range', [2.0, 8.0])
+
+    # Centers
+    alpha_center = np.mean(alpha_full_range)
+    A_center = np.mean(A_full_range)
+    omega_c_center = np.mean(omega_c_full_range)
+
+    # Maximum half-widths
+    alpha_max_hw = (alpha_full_range[1] - alpha_full_range[0]) / 2
+    A_max_hw = (A_full_range[1] - A_full_range[0]) / 2
+    omega_c_max_hw = (omega_c_full_range[1] - omega_c_full_range[0]) / 2
+
     for var_scale in variance_levels:
-        # Scale parameter ranges (wider range → higher variance)
-        alpha_width = 1.5 * np.sqrt(var_scale / 0.004)  # Normalized to base
-        A_width = 0.25 * np.sqrt(var_scale / 0.004)
-        omega_c_width = 6.0 * np.sqrt(var_scale / 0.004)
+        # Normalize var_scale to [0, 1] range
+        # Assume max variance corresponds to full parameter ranges
+        # Scale factor: sqrt for variance -> std -> range
+        scale_factor = np.sqrt(var_scale / max(variance_levels))
 
-        # Center values
-        alpha_center = 1.25
-        A_center = 0.175
-        omega_c_center = 5.0
+        # Scale half-widths proportionally
+        alpha_hw = alpha_max_hw * scale_factor
+        A_hw = A_max_hw * scale_factor
+        omega_c_hw = omega_c_max_hw * scale_factor
 
+        # Create ranges (no clipping!)
         task_dist = TaskDistribution(
             dist_type='uniform',
             ranges={
-                'alpha': (
-                    max(0.5, alpha_center - alpha_width/2),
-                    min(2.0, alpha_center + alpha_width/2)
-                ),
-                'A': (
-                    max(0.05, A_center - A_width/2),
-                    min(0.3, A_center + A_width/2)
-                ),
-                'omega_c': (
-                    max(2.0, omega_c_center - omega_c_width/2),
-                    min(8.0, omega_c_center + omega_c_width/2)
-                )
+                'alpha': (alpha_center - alpha_hw, alpha_center + alpha_hw),
+                'A': (A_center - A_hw, A_center + A_hw),
+                'omega_c': (omega_c_center - omega_c_hw, omega_c_center + omega_c_hw)
             }
         )
 
-        distributions.append((task_dist, var_scale))
+        # Compute expected parameter variance for this distribution
+        expected_var = task_dist.compute_variance()
+
+        distributions.append((task_dist, expected_var))
+
+        print(f"  Variance level {var_scale:.5f}:")
+        print(f"    Expected σ²_params = {expected_var:.6f}")
+        print(f"    α: [{alpha_center - alpha_hw:.3f}, {alpha_center + alpha_hw:.3f}]")
+        print(f"    A: [{A_center - A_hw:.3f}, {A_center + A_hw:.3f}]")
+        print(f"    ω_c: [{omega_c_center - omega_c_hw:.3f}, {omega_c_center + omega_c_hw:.3f}]")
 
     return distributions
 
@@ -87,7 +107,7 @@ def run_gap_vs_variance_experiment(
     meta_policy_path: str,
     robust_policy_path: str,
     config: Dict,
-    variance_levels: List[float] = [0.001, 0.002, 0.004, 0.008, 0.016],
+    variance_levels: List[float] = [0.0001, 0.001, 0.004, 0.01, 0.025],
     K_fixed: int = 5,
     n_test_tasks: int = 100,
     output_dir: str = "results/gap_vs_variance",
@@ -146,16 +166,25 @@ def run_gap_vs_variance_experiment(
     gaps_all = []
     grape_fidelities_all = [] if include_grape else None
 
-    for idx, (task_dist, var_target) in enumerate(task_dists):
-        print(f"\n  Variance level {idx+1}/{len(task_dists)} (target: {var_target:.5f}):")
+    for idx, (task_dist, var_expected) in enumerate(task_dists):
+        print(f"\n  Variance level {idx+1}/{len(task_dists)}:")
+        print(f"    Expected σ²_params = {var_expected:.6f}")
 
         # Sample tasks from this distribution
         test_tasks = task_dist.sample(n_test_tasks)
 
-        # Compute actual variance using new signature
-        sigma2_S = compute_control_relevant_variance(env, test_tasks)
-        variances_computed.append(sigma2_S)
-        print(f"    Computed σ²_S = {sigma2_S:.5f}")
+        # Compute parameter variance (simple, direct measure of task diversity)
+        params_array = np.array([[t.alpha, t.A, t.omega_c] for t in test_tasks])
+        sigma2_params = np.var(params_array, axis=0).sum()  # Total variance across all params
+
+        variances_computed.append(sigma2_params)
+        print(f"    Computed σ²_params (empirical) = {sigma2_params:.6f}")
+        print(f"    Ratio empirical/expected = {sigma2_params/var_expected:.3f}")
+
+        # Diagnostic: show actual parameter ranges sampled
+        print(f"    Sampled α: [{params_array[:, 0].min():.3f}, {params_array[:, 0].max():.3f}]")
+        print(f"    Sampled A: [{params_array[:, 1].min():.3f}, {params_array[:, 1].max():.3f}]")
+        print(f"    Sampled ω_c: [{params_array[:, 2].min():.3f}, {params_array[:, 2].max():.3f}]")
 
         fidelities_meta = []
         fidelities_robust = []
@@ -312,16 +341,16 @@ def run_gap_vs_variance_experiment(
 
 
 def plot_gap_vs_variance(results: Dict, output_path: str = "results/gap_vs_variance/figure.pdf"):
-    """Generate publication-quality figure with GRAPE baseline"""
+    """Generate publication-quality figure with diagnostics"""
     sns.set_style("whitegrid")
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
 
     variances = np.array(results['variances'])
     gaps_mean = np.array(results['gaps_mean'])
     gaps_std = np.array(results['gaps_std'])
 
-    # Plot empirical gap data
-    ax.errorbar(
+    # Plot 1: Gap vs Variance with fit
+    ax1.errorbar(
         variances, gaps_mean, yerr=gaps_std,
         fmt='o', markersize=10, capsize=5, capthick=2,
         label=f'MAML Gap (K={results["K_fixed"]})',
@@ -332,9 +361,9 @@ def plot_gap_vs_variance(results: Dict, output_path: str = "results/gap_vs_varia
     if results['fit']['success']:
         var_fine = np.linspace(0, max(variances), 100)
         gap_pred = linear_model(var_fine, results['fit']['slope'])
-        ax.plot(
+        ax1.plot(
             var_fine, gap_pred, '--',
-            label=f"Theory: $Gap \\propto \\sigma^2_S$\n" +
+            label=f"Linear Fit: Gap = {results['fit']['slope']:.2f} × σ²\n" +
                   f"$R^2 = {results['fit']['r2']:.3f}$",
             color='darkred', linewidth=2
         )
@@ -343,25 +372,48 @@ def plot_gap_vs_variance(results: Dict, output_path: str = "results/gap_vs_varia
     if results['grape']['included']:
         grape_means = [d['mean'] for d in results['grape']['fidelities_per_variance']]
         grape_stds = [d['std'] for d in results['grape']['fidelities_per_variance']]
-        ax.errorbar(
+        ax1.errorbar(
             variances, grape_means, yerr=grape_stds,
             fmt='s', markersize=8, capsize=4, capthick=2,
             label='GRAPE Baseline',
             color='green', linewidth=2, alpha=0.7
         )
 
-    ax.set_xlabel('Control-Relevant Task Variance ($\\sigma^2_S$)',
+    ax1.set_xlabel('Task Parameter Variance ($\\sigma^2_{params}$)',
                    fontsize=14, fontweight='bold')
-    ax.set_ylabel('Fidelity / Optimality Gap', fontsize=14, fontweight='bold')
-    ax.set_title('Meta-Learning Gap vs Task Diversity (with GRAPE Baseline)',
-                  fontsize=16, fontweight='bold')
-    ax.legend(fontsize=11, loc='upper left')
-    ax.grid(True, alpha=0.3)
-    ax.tick_params(labelsize=12)
+    ax1.set_ylabel('Optimality Gap (Meta - Robust)', fontsize=14, fontweight='bold')
+    ax1.set_title('Gap vs Task Diversity', fontsize=16, fontweight='bold')
+    ax1.legend(fontsize=11, loc='best')
+    ax1.grid(True, alpha=0.3)
+    ax1.tick_params(labelsize=12)
+
+    # Plot 2: Diagnostic - verify variance is monotonic
+    ax2.plot(range(len(variances)), variances, 'o-', markersize=10,
+             linewidth=2, color='purple', label='Computed Variance')
+    ax2.set_xlabel('Variance Level Index', fontsize=14, fontweight='bold')
+    ax2.set_ylabel('$\\sigma^2_{params}$', fontsize=14, fontweight='bold')
+    ax2.set_title('Variance Verification (Should be Monotonic)', fontsize=16, fontweight='bold')
+    ax2.grid(True, alpha=0.3)
+    ax2.tick_params(labelsize=12)
+
+    # Add text showing if monotonic
+    is_monotonic = all(variances[i] <= variances[i+1] for i in range(len(variances)-1))
+    status_text = "✓ Monotonic" if is_monotonic else "✗ NOT Monotonic"
+    status_color = 'green' if is_monotonic else 'red'
+    ax2.text(0.05, 0.95, status_text, transform=ax2.transAxes,
+             fontsize=14, fontweight='bold', color=status_color,
+             verticalalignment='top',
+             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Figure saved to {output_path}")
+
+    # Also save PNG
+    png_path = output_path.replace('.pdf', '.png')
+    plt.savefig(png_path, dpi=300, bbox_inches='tight')
+    print(f"Figure saved to {png_path}")
+
     plt.close()
 
 
@@ -392,16 +444,16 @@ if __name__ == "__main__":
         print("Please train policies first using experiments/train_meta.py and train_robust.py")
         sys.exit(1)
 
-    # Run experiment
+    # Run experiment with FIXED parameters
     results = run_gap_vs_variance_experiment(
         meta_policy_path=meta_path,
         robust_policy_path=robust_path,
         config=config,
-        variance_levels=[0.001, 0.002, 0.004, 0.008, 0.016],
+        variance_levels=[0.0001, 0.001, 0.004, 0.01, 0.025],  # FIXED: Better range
         K_fixed=5,
-        n_test_tasks=2,
+        n_test_tasks=100,  # FIXED: Increased from 2 to 100 for proper statistics
         output_dir="results/gap_vs_variance",
-        include_grape = False
+        include_grape=False
     )
 
     # Generate figure
