@@ -1,6 +1,3 @@
-================================================================================
-QUICK REFERENCE: ROBUST EXPERIMENTS & OPTIMIZATION METHODS
-================================================================================
 
 KEY FILES AT A GLANCE:
 
@@ -68,7 +65,7 @@ OPTIMIZATION METHODS COMPARISON
 │ Robust Average  │ baselines:90-113     │ None       │ E[L]          │
 │ Robust Minimax  │ baselines:115-144    │ None       │ max_θ L       │
 │ Robust CVaR     │ baselines:146-176    │ None       │ Top-α worst   │
-│ GRAPE Single    │ baselines:492-586    │ None       │ Direct pulse  │
+│ GRAPE Single    │ baselines:492-586    │ None       │ Direct puldse  │
 │ GRAPE Robust    │ baselines:635-718    │ None       │ Multi-task    │
 │ Domain Random   │ baselines:388-432    │ None       │ Augmentation  │
 │ H2/H∞ Control   │ baselines:326-385    │ None       │ Classical     │
@@ -225,6 +222,3 @@ R² Below Target:
   Problem: Gap vs K fit gives R² < 0.90
   Solution: Increase n_test_tasks (100 minimum recommended)
 
-================================================================================
-END QUICK REFERENCE
-================================================================================
