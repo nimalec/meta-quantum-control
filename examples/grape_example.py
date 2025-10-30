@@ -3,6 +3,26 @@ Example: Using GRAPE for Quantum Control Optimization
 
 This script demonstrates how to use the GRAPE (Gradient Ascent Pulse Engineering)
 baseline for optimizing quantum control pulses.
+
+GRAPE limitations: 
+- No generalization: Must re-optimize for each new task
+- Computationally expensive: Requires many quantum simulations per iteration
+-  Gradient estimation: Uses finite differences (not fully differentiable)
+- No adaptation: Cannot quickly adapt to new noise conditions
+
+Khaneja et al., "Optimal control of coupled spin dynamics" (2005)
+de Fouquieres et al., "Second order gradient ascent pulse engineering" (2011)
+Machnes et al., "Comparing, optimizing, and benchmarking quantum-control algorithms" (2018)
+
+Tradeoffs GRAPE vs. MAML  
+ 
+Aspect	GRAPE	Meta-Learning (MAML)
+Optimization	Direct pulse optimization	Policy network optimization 
+Generalization	None (task-specific)	Learns to adapt across tasks
+Adaptation	N/A	 Fast fine-tuning (K steps)
+Computation	Many simulations per task	Amortized across tasks
+Sample efficiency	High per task	Low per task (after meta-training)
+Interpretability	High (direct pulses)	Medium (learned policy)
 """
 
 import numpy as np
