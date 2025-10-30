@@ -21,9 +21,6 @@ from pathlib import Path
 import json
 from typing import Dict, List
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
 
 def load_training_logs(log_path: str) -> Dict:
     """

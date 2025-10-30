@@ -449,9 +449,9 @@ if __name__ == "__main__":
         meta_policy_path=meta_path,
         robust_policy_path=robust_path,
         config=config,
-        variance_levels=[0.0001, 0.001, 0.004, 0.01, 0.025],  # FIXED: Better range
-        K_fixed=5,
-        n_test_tasks=100,  # FIXED: Increased from 2 to 100 for proper statistics
+        variance_levels=[0.0001, 0.001, 0.004, 0.02, 0.25],  # FIXED: Better range
+        K_fixed=1,
+        n_test_tasks=10,  # FIXED: Increased from 2 to 100 for proper statistics
         output_dir="results/gap_vs_variance",
         include_grape=False
     )

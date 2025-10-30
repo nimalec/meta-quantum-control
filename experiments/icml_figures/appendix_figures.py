@@ -17,8 +17,6 @@ from pathlib import Path
 import json
 from typing import Dict, List
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from metaqctrl.quantum.noise_models import TaskDistribution
 from metaqctrl.theory.quantum_environment import create_quantum_environment, get_target_state_from_config
@@ -31,7 +29,7 @@ def run_ablation_inner_lr(
     config: Dict,
     inner_lrs: List[float] = [0.001, 0.005, 0.01, 0.02, 0.05],
     K_values: List[int] = [1, 3, 5, 10],
-    n_test_tasks: int = 50
+    n_test_tasks: int = 5
 ) -> Dict:
     """Appendix S1(a): Inner learning rate sweep"""
     print("Running inner LR ablation...")
@@ -104,7 +102,7 @@ def run_ablation_first_order(
     robust_policy_path: str,
     config: Dict,
     K_values: List[int] = [1, 3, 5, 10, 20],
-    n_test_tasks: int = 100
+    n_test_tasks: int = 5
 ) -> Dict:
     """Appendix S1(b): First-order vs second-order MAML"""
     print("Running first-order vs second-order comparison...")
@@ -194,7 +192,7 @@ def run_flat_psd_variance_experiment(
     config: Dict,
     variance_levels: List[float] = [0.001, 0.005, 0.01, 0.02, 0.05],
     K_fixed: int = 5,
-    n_test_tasks: int = 100
+    n_test_tasks: int = 5
 ) -> Dict:
     """
     Appendix S2: The "flat" gap vs α/A/ω_c variance
@@ -424,7 +422,7 @@ def generate_appendix_figures(
             meta_policy_path, robust_policy_path, config,
             inner_lrs=[0.001, 0.005, 0.01, 0.02, 0.05],
             K_values=[1, 3, 5, 10],
-            n_test_tasks=50
+            n_test_tasks=5 
         )
 
         # Appendix S1(b): First vs second order
@@ -432,7 +430,7 @@ def generate_appendix_figures(
         results_order = run_ablation_first_order(
             meta_policy_path, robust_policy_path, config,
             K_values=[1, 3, 5, 10, 20],
-            n_test_tasks=100
+            n_test_tasks=5
         )
 
         # Appendix S2: Flat variance
@@ -441,7 +439,7 @@ def generate_appendix_figures(
             meta_policy_path, robust_policy_path, config,
             variance_levels=[0.001, 0.005, 0.01, 0.02, 0.05],
             K_fixed=5,
-            n_test_tasks=100
+            n_test_tasks=5
         )
 
         # Save results
@@ -473,7 +471,7 @@ def generate_appendix_figures(
     print("\nGenerating figures...")
     plot_appendix_s1(results_lr, results_order, output_dir)
     plot_appendix_s2(results_flat, output_dir)
-    plot_appendix_s3_placeholder(output_dir)
+    #plot_appendix_s3_placeholder(output_dir)
 
     print("\n" + "=" * 80)
     print("APPENDIX FIGURES COMPLETE")
@@ -486,41 +484,44 @@ if __name__ == "__main__":
         'n_controls': 2,
         'n_segments': 20,
         'horizon': 1.0,
-        'target_gate': 'hadamard',
+        'target_gate': 'pauli_x',
         'hidden_dim': 128,
         'n_hidden_layers': 2,
         'inner_lr': 0.01,
         'noise_frequencies': [1.0, 5.0, 10.0]
     }
 
-    script_dir = Path(__file__).parent
-    checkpoint_dir = script_dir.parent.parent / "checkpoints"
+    # script_dir = Path(__file__).parent
+    # checkpoint_dir = script_dir.parent.parent / "checkpoints"
 
-    possible_meta_paths = [
-        checkpoint_dir / "maml_best.pt",
-        checkpoint_dir / "maml_20251027_161519_best_policy.pt",
-    ]
-    possible_robust_paths = [
-        checkpoint_dir / "robust_best.pt",
-        checkpoint_dir / "robust_minimax_20251027_162238_best_policy.pt",
-    ]
+    # possible_meta_paths = [
+    #     checkpoint_dir / "maml_best.pt",
+    #     checkpoint_dir / "maml_20251027_161519_best_policy.pt",
+    # ]
+    # possible_robust_paths = [
+    #     checkpoint_dir / "robust_best.pt",
+    #     checkpoint_dir / "robust_minimax_20251027_162238_best_policy.pt",
+    # ]
 
-    meta_path = None
-    for p in possible_meta_paths:
-        if p.exists():
-            meta_path = str(p)
-            break
+    # meta_path = None
+    # for p in possible_meta_paths:
+    #     if p.exists():
+    #         meta_path = str(p)
+    #         break
 
-    robust_path = None
-    for p in possible_robust_paths:
-        if p.exists():
-            robust_path = str(p)
-            break
+    # robust_path = None
+    # for p in possible_robust_paths:
+    #     if p.exists():
+    #         robust_path = str(p)
+    #         break
 
-    if meta_path is None or robust_path is None:
-        print("ERROR: Trained models not found")
-        sys.exit(1)
-
+    # if meta_path is None or robust_path is None:
+    #     print("ERROR: Trained models not found")
+    #     sys.exit(1)
+    # Find checkpoints  
+    meta_path = "../checkpoints/maml_best.pt"  
+    robust_path = "../checkpoints/robust_best.pt"   
+    
     print(f"Using meta policy: {meta_path}")
     print(f"Using robust policy: {robust_path}")
 

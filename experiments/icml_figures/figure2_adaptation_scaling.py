@@ -21,8 +21,6 @@ from typing import Dict, List, Tuple
 from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters
 from metaqctrl.meta_rl.policy import PulsePolicy
@@ -62,8 +60,8 @@ def run_gap_vs_k_experiment(
     robust_policy_path: str,
     config: Dict,
     task_dist_config: Dict,  # For creating distributions with different variances
-    k_values: List[int] = [1, 2, 3, 5, 7, 10, 15, 20],
-    n_test_tasks: int = 100
+    k_values: List[int] = [1, 2, 3, 5, 7, 10],
+    n_test_tasks: int = 2  
 ) -> Dict:
     """
     Run gap vs K experiment for a given task distribution
@@ -71,9 +69,9 @@ def run_gap_vs_k_experiment(
     Args:
         task_dist_config: Dict with 'alpha_range', 'A_range', 'omega_c_range'
     """
-    print(f"Running gap vs K experiment...")
-    print(f"  Task ranges: α={task_dist_config['alpha_range']}, "
-          f"A={task_dist_config['A_range']}, ω_c={task_dist_config['omega_c_range']}")
+   # print(f"Running gap vs K experiment...")
+   # #print(f"  Task ranges: α={task_dist_config['alpha_range']}, "
+   #       f"A={task_dist_config['A_range']}, ω_c={task_dist_config['omega_c_range']}")
 
     # Load policies
     meta_policy_template = load_policy_from_checkpoint(
@@ -236,7 +234,7 @@ def run_gap_vs_diversity_experiment(
     diversity_type: str = 'detuning',  # 'detuning', 'decoherence', or 'actuator'
     diversity_levels: List[float] = None,
     K_fixed: int = 5,
-    n_test_tasks: int = 100
+    n_test_tasks: int = 2
 ) -> Dict:
     """
     Panel 2(d)/(e): Gap vs physically meaningful diversity
@@ -406,8 +404,8 @@ def generate_figure2(
                 'A': (0.05, 0.3),
                 'omega_c': (2.0, 8.0)
             },
-            k_values=[1, 2, 3, 5, 7, 10, 15, 20],
-            n_test_tasks=100
+            k_values=[1, 2, 3, 5, 7, 10],
+            n_test_tasks=2
         )
 
         # Panel (c): Low variance
@@ -419,8 +417,8 @@ def generate_figure2(
                 'A': (0.15, 0.20),
                 'omega_c': (4.0, 6.0)
             },
-            k_values=[1, 2, 3, 5, 7, 10, 15, 20],
-            n_test_tasks=100
+            k_values=[1, 2, 3, 5, 7, 10],
+            n_test_tasks=2
         )
 
         # Panel (d): Detuning diversity
@@ -430,7 +428,7 @@ def generate_figure2(
             diversity_type='detuning',
             diversity_levels=[1.0, 2.0, 3.0, 4.0, 6.0],
             K_fixed=5,
-            n_test_tasks=100
+            n_test_tasks=2
         )
 
         # Panel (e): Decoherence diversity (optional)
@@ -441,7 +439,7 @@ def generate_figure2(
                 diversity_type='decoherence',
                 diversity_levels=[0.05, 0.10, 0.15, 0.20, 0.30],
                 K_fixed=5,
-                n_test_tasks=100
+                n_test_tasks=2
             )
         except Exception as e:
             print(f"  Decoherence experiment failed: {e}")
@@ -522,38 +520,17 @@ if __name__ == "__main__":
         'n_controls': 2,
         'n_segments': 20,
         'horizon': 1.0,
-        'target_gate': 'hadamard',
+        'target_gate': 'pauli_x',
         'hidden_dim': 128,
         'n_hidden_layers': 2,
         'inner_lr': 0.01,
         'noise_frequencies': [1.0, 5.0, 10.0]
     }
 
-    # Find checkpoints
-    script_dir = Path(__file__).parent
-    checkpoint_dir = script_dir.parent.parent / "checkpoints"
-
-    possible_meta_paths = [
-        checkpoint_dir / "maml_best.pt",
-        checkpoint_dir / "maml_20251027_161519_best_policy.pt",
-    ]
-    possible_robust_paths = [
-        checkpoint_dir / "robust_best.pt",
-        checkpoint_dir / "robust_minimax_20251027_162238_best_policy.pt",
-    ]
-
-    meta_path = None
-    for p in possible_meta_paths:
-        if p.exists():
-            meta_path = str(p)
-            break
-
-    robust_path = None
-    for p in possible_robust_paths:
-        if p.exists():
-            robust_path = str(p)
-            break
-
+    # Find checkpoints  
+    meta_path = "../checkpoints/maml_best.pt"  
+    robust_path = "../checkpoints/robust_best.pt"    
+ 
     if meta_path is None or robust_path is None:
         print("ERROR: Trained models not found")
         print("Please train policies first using experiments/train_meta.py and train_robust.py")

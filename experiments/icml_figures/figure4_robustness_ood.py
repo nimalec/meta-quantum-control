@@ -18,8 +18,6 @@ from pathlib import Path
 import json
 from typing import Dict, List, Tuple
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters
 from metaqctrl.meta_rl.policy import PulsePolicy
@@ -34,7 +32,7 @@ def run_ood_detuning_experiment(
     config: Dict,
     ood_detuning_levels: List[float] = None,
     K_fixed: int = 5,
-    n_test_tasks: int = 50
+    n_test_tasks: int = 5
 ) -> Dict:
     """
     Panel 4(a): Performance under OOD detuning mismatch
@@ -143,7 +141,7 @@ def run_per_task_heatmap_experiment(
     meta_policy_path: str,
     robust_policy_path: str,
     config: Dict,
-    n_hard_tasks: int = 20,
+    n_hard_tasks: int = 5,
     K_fixed: int = 5
 ) -> Dict:
     """
@@ -222,9 +220,9 @@ def run_baseline_comparison_experiment(
     meta_policy_path: str,
     robust_policy_path: str,
     config: Dict,
-    n_test_tasks: int = 100,
+    n_test_tasks: int = 5,
     K_fixed: int = 5,
-    include_grape: bool = True,
+    include_grape: bool = False,
     grape_iterations: int = 50
 ) -> Dict:
     """
@@ -266,7 +264,7 @@ def run_baseline_comparison_experiment(
     }
 
     for i, task in enumerate(test_tasks):
-        if i % 20 == 0:
+        if i % 2 == 0:
             print(f"  Task {i}/{n_test_tasks}...")
 
         task_features = torch.tensor([task.alpha, task.A, task.omega_c], dtype=torch.float32)
@@ -442,14 +440,14 @@ def generate_figure4(
             meta_policy_path, robust_policy_path, config,
             ood_detuning_levels=[1.0, 1.5, 2.0, 2.5, 3.0, 4.0],
             K_fixed=5,
-            n_test_tasks=50
+            n_test_tasks=5
         )
 
         # Panel (b)
         print("\n[2/3] Running per-task heatmap experiment...")
         results_heatmap = run_per_task_heatmap_experiment(
             meta_policy_path, robust_policy_path, config,
-            n_hard_tasks=20,
+            n_hard_tasks=5,
             K_fixed=5
         )
 
@@ -457,7 +455,7 @@ def generate_figure4(
         print("\n[3/3] Running baseline comparison experiment...")
         results_comparison = run_baseline_comparison_experiment(
             meta_policy_path, robust_policy_path, config,
-            n_test_tasks=100,
+            n_test_tasks=5,
             K_fixed=5,
             include_grape=False  # Set to True if you want GRAPE (slow)
         )
@@ -530,38 +528,18 @@ if __name__ == "__main__":
         'n_controls': 2,
         'n_segments': 20,
         'horizon': 1.0,
-        'target_gate': 'hadamard',
+        'target_gate': 'paulix',
         'hidden_dim': 128,
         'n_hidden_layers': 2,
         'inner_lr': 0.01,
         'noise_frequencies': [1.0, 5.0, 10.0]
     }
 
-    # Find checkpoints
-    script_dir = Path(__file__).parent
-    checkpoint_dir = script_dir.parent.parent / "checkpoints"
 
-    possible_meta_paths = [
-        checkpoint_dir / "maml_best.pt",
-        checkpoint_dir / "maml_20251027_161519_best_policy.pt",
-    ]
-    possible_robust_paths = [
-        checkpoint_dir / "robust_best.pt",
-        checkpoint_dir / "robust_minimax_20251027_162238_best_policy.pt",
-    ]
-
-    meta_path = None
-    for p in possible_meta_paths:
-        if p.exists():
-            meta_path = str(p)
-            break
-
-    robust_path = None
-    for p in possible_robust_paths:
-        if p.exists():
-            robust_path = str(p)
-            break
-
+    # Find checkpoints  
+    meta_path = "../checkpoints/maml_best.pt"  
+    robust_path = "../checkpoints/robust_best.pt"   
+    
     if meta_path is None or robust_path is None:
         print("ERROR: Trained models not found")
         print("Please train policies first")
