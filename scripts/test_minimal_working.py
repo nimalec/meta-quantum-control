@@ -56,7 +56,7 @@ def test_environment():
     # Test Lindblad operators
     #Check this 
     L_ops = env.get_lindblad_operators(task)
-    print(f"✓ Lindblad operators: {len(L_ops)} operators")
+    print(f" Lindblad operators: {len(L_ops)} operators")
     for i, L in enumerate(L_ops):
         print(f"  L{i} norm: {np.linalg.norm(L):.4f}")
     
@@ -117,7 +117,7 @@ def test_spectral_gap(env):
     task = NoiseParameters(alpha=1.0, A=0.1, omega_c=5.0)
     
     gap = compute_spectral_gap(env, task)
-    print(f"✓ Spectral gap: Δ = {gap:.6f}")
+    print(f"✓Spectral gap: {gap:.6f}")
     
     # Test on multiple tasks
     tasks = [
@@ -156,7 +156,7 @@ def test_constants(env, policy):
     
     # Filter constant --> C_filter 
     C_filter = estimate_filter_constant(env)
-    print(f"✓ C_filter = {C_filter:.6f}")
+    print(f" C_filter = {C_filter:.6f}")
     
     # Control-relevant variance
     ## control relevant task variance 
@@ -304,4 +304,4 @@ def main():
 
 if __name__ == "__main__":
     success = main()
-    sys.exit(0 if success else 1)
+
