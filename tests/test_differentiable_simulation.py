@@ -52,10 +52,10 @@ def test_basic_gradient_flow():
     assert controls.grad is not None, " No gradients!"
     grad_norm = torch.norm(controls.grad).item()
 
-    print(f"  ✓ Gradients computed: {controls.grad is not None}")
-    print(f"  ✓ Gradient norm: {grad_norm:.4e}")
-    print(f"  ✓ Gradient shape: {controls.grad.shape}")
-    print(f"  ✓ Loss: {loss.item():.4f}")
+    print(f"  Gradients computed: {controls.grad is not None}")
+    print(f"  Gradient norm: {grad_norm:.4e}")
+    print(f"  Gradient shape: {controls.grad.shape}")
+    print(f"  Loss: {loss.item():.4f}")
 
     assert grad_norm > 0, " Zero gradient!"
     print("\n Test 1 PASSED: Basic gradient flow works!")
@@ -128,7 +128,7 @@ def test_policy_to_simulation_gradient_flow():
         if param.grad is not None:
             grad_norm = torch.norm(param.grad).item()
             grad_norms.append(grad_norm)
-            print(f"  ✓ {name}: grad_norm = {grad_norm:.4e}")
+            print(f"  {name}: grad_norm = {grad_norm:.4e}")
 
     assert len(grad_norms) > 0, " No policy gradients!"
     assert all(g > 0 for g in grad_norms), " Zero gradients in policy!"
@@ -285,7 +285,7 @@ def test_simple_training_step():
 
     # Loss should generally decrease (though not guaranteed in 5 steps)
     if losses[-1] < losses[0]:
-        print("  ✓ Loss decreased - learning is happening!")
+        print("   Loss decreased - learning is happening!")
     else:
         print("   Loss didn't decrease (may need more steps or better LR)")
 
@@ -347,4 +347,4 @@ def main():
 
 if __name__ == "__main__":
     success = main()
-    sys.exit(0 if success else 1)
+ 

@@ -246,17 +246,17 @@ def test_end_to_end_mini():
 
 if __name__ == "__main__":
     # Run all tests
-    print("Running installation tests...\n")
+    print("Running installation tests \n")
     
-    print("1. Testing imports...")
+    print("1. Testing imports ")
     test_imports()
     print("   Passed\n")
     
-    print("2. Testing Lindblad simulator...")
+    print("2. Testing Lindblad simulator ")
     test_lindblad_simulator()
     print("   Passed\n")
     
-    print("3. Testing noise PSD...")
+    print("3. Testing noise PSD ")
     test_noise_psd()
     print("   Passed\n")
     
@@ -264,31 +264,25 @@ if __name__ == "__main__":
     test_task_distribution()
     print("   Passed\n")
     
-    print("5. Testing fidelity computation...")
+    print("5. Testing fidelity computation ")
     test_fidelity_computation()
     print("   Passed\n")
     
-    print("6. Testing policy network...")
+    print("6. Testing policy network ")
     test_policy_network()
     print("   Passed\n")
     
-    print("7. Testing MAML initialization...")
+    print("7. Testing MAML initialization ")
     test_maml_initialization()
     print("   Passed\n")
     
-    print("8. Testing gap constants...")
+    print("8. Testing gap constants ")
     test_gap_constants()
     print("   Passed\n")
     
-    print("9. Running end-to-end test...")
+    print("9. Running end-to-end test ")
     test_end_to_end_mini()
     print("   Passed\n")
     
     print("=" * 50)
     print("All tests passed! ")
-    print("=" * 50)
-    print("\nInstallation verified successfully.")
-    print("\nNext steps:")
-    print("1. Run: python experiments/train_meta.py --config configs/experiment_config.yaml")
-    print("2. Run: python experiments/train_robust.py --config configs/experiment_config.yaml")
-    print("3. Run: python experiments/eval_gap.py --meta_path <path> --robust_path <path>")
