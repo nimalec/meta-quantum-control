@@ -1,9 +1,3 @@
-# Paper Results Generation
-
-This directory contains scripts to generate all core paper results and figures:
-
-**"Meta-Reinforcement Learning for Quantum Control: A Framework for Quantifying Adaptation Gains under Noise Shifts"**
-
 ## Overview
 
 The codebase validates the central theoretical prediction:
