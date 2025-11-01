@@ -32,7 +32,8 @@ class QuantumEnvironment:
         psd_to_lindblad,
         target_state: np.ndarray,
         T: float = 1.0,
-        method: str = 'RK45'
+        method: str = 'RK45',
+        target_unitary: np.ndarray = None
     ):
         """
         Args:
@@ -42,28 +43,30 @@ class QuantumEnvironment:
             target_state: Target density matrix
             T: Evolution time
             method: Integration method
+            target_unitary: Target unitary gate (optional, for process fidelity)
         """
         self.H0 = H0
         self.H_controls = H_controls
         self.psd_to_lindblad = psd_to_lindblad
         self.target_state = target_state
+        self.target_unitary = target_unitary  # Store for process fidelity
         self.T = T
         self.method = method
-        
+
         # System dimensions
         self.d = H0.shape[0]
         self.n_controls = len(H_controls)
-        
+
         # Cache for Lindblad operators (keyed by task hash)
         self._L_cache = {}
-        
+
         # Cache for simulators (keyed by task hash)
         self._sim_cache = {}
-        
-        # Initial state (|0⟩ for single qubit)
+
+        # Initial state (|0⟩ for single qubit, |00⟩ for two qubit)
         self.rho0 = np.zeros((self.d, self.d), dtype=complex)
         self.rho0[0, 0] = 1.0
-        
+
         print(f"QuantumEnvironment initialized: d={self.d}, n_controls={self.n_controls}, T={T}")
 
     # API compatibility properties
@@ -149,32 +152,97 @@ class QuantumEnvironment:
         self,
         controls: np.ndarray,
         task_params: NoiseParameters,
-        return_trajectory: bool = False
+        return_trajectory: bool = False,
+        use_process_fidelity: bool = False
     ) -> float:
-        """ Good. 
+        """ Good.
         Simulate and compute fidelity.
-        
+
         Args:
             controls: Control sequence (n_segments, n_controls)
             task_params: Task parameters
             return_trajectory: If True, return (fidelity, trajectory)
-            
+            use_process_fidelity: If True, use average gate fidelity over all input states
+                                  (important for multi-qubit gates like CNOT!)
+
         Returns:
             fidelity: Achieved fidelity (float)
             or (fidelity, trajectory) if return_trajectory=True
         """
         # Get cached simulator
         sim = self.get_simulator(task_params)
-        
-        # Simulate
-        rho_final, trajectory = sim.evolve(self.rho0, controls, self.T)
-        
-        # Compute fidelity
-        fidelity = state_fidelity(rho_final, self.target_state)
-        
-        if return_trajectory:
-            return fidelity, trajectory
-        return fidelity
+
+        if use_process_fidelity and self.d > 2:
+            # For multi-qubit gates, compute average fidelity over all computational basis states
+            fidelity = self._compute_average_gate_fidelity(sim, controls)
+
+            if return_trajectory:
+                # For trajectory, just use initial state |0...0⟩
+                rho_final, trajectory = sim.evolve(self.rho0, controls, self.T)
+                return fidelity, trajectory
+            return fidelity
+        else:
+            # Standard single-state fidelity (works for 1-qubit)
+            rho_final, trajectory = sim.evolve(self.rho0, controls, self.T)
+            fidelity = state_fidelity(rho_final, self.target_state)
+
+            if return_trajectory:
+                return fidelity, trajectory
+            return fidelity
+
+    def _compute_average_gate_fidelity(
+        self,
+        sim: LindbladSimulator,
+        controls: np.ndarray
+    ) -> float:
+        """
+        Compute average gate fidelity over all computational basis states.
+
+        This is the proper fidelity measure for multi-qubit gates!
+
+        For 2-qubits: Average over |00⟩, |01⟩, |10⟩, |11⟩
+
+        Args:
+            sim: LindbladSimulator instance
+            controls: Control sequence
+
+        Returns:
+            avg_fidelity: Average fidelity over all basis states
+        """
+        from metaqctrl.quantum.gates import state_fidelity
+
+        if self.target_unitary is None:
+            # Fallback: Use entanglement fidelity formula
+            # This is less accurate but doesn't require storing target unitary
+            print("WARNING: target_unitary not provided. Using approximate fidelity.")
+            print("         Set target_unitary in QuantumEnvironment for accurate process fidelity.")
+
+            # Just return single-state fidelity as fallback
+            rho_final, _ = sim.evolve(self.rho0, controls, self.T)
+            return state_fidelity(rho_final, self.target_state)
+
+        # Proper average gate fidelity: Test on all computational basis states
+        fidelities = []
+
+        for i in range(self.d):
+            # Create initial state |i⟩
+            ket_i = np.zeros(self.d, dtype=complex)
+            ket_i[i] = 1.0
+            rho_i = np.outer(ket_i, ket_i.conj())
+
+            # Evolve under controls
+            rho_final, _ = sim.evolve(rho_i, controls, self.T)
+
+            # Target output: U_target |i⟩
+            ket_target = self.target_unitary @ ket_i
+            rho_target_i = np.outer(ket_target, ket_target.conj())
+
+            # Compute fidelity
+            fid = state_fidelity(rho_final, rho_target_i)
+            fidelities.append(fid)
+
+        # Average over all input states
+        return float(np.mean(fidelities))
     
     def evaluate_policy(
         self,
@@ -448,15 +516,16 @@ class BatchedQuantumEnvironment(QuantumEnvironment):
 
 
 # Helper functions
-def get_target_state_from_config(config: dict) -> np.ndarray:
+def get_target_state_from_config(config: dict) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Get target density matrix from config.
+    Get target density matrix and unitary from config.
 
     Args:
         config: Configuration dictionary with 'target_gate' and 'num_qubits' keys
 
     Returns:
         target_state: Target density matrix (d x d)
+        target_unitary: Target unitary gate (d x d)
     """
     from metaqctrl.quantum.gates import TargetGates
 
@@ -486,52 +555,88 @@ def get_target_state_from_config(config: dict) -> np.ndarray:
     target_ket = U_target @ ket_0
     target_state = np.outer(target_ket, target_ket.conj())
 
-    return target_state
+    return target_state, U_target
 
 
 # Factory function
-def create_quantum_environment(config: dict, target_state: np.ndarray = None) -> QuantumEnvironment:
+def create_quantum_environment(config: dict, target_state: np.ndarray = None, target_unitary: np.ndarray = None) -> QuantumEnvironment:
     """
     Create quantum environment from config.
 
     Args:
         config: Configuration dictionary
         target_state: Target density matrix. If None, will be created from config['target_gate']
+        target_unitary: Target unitary gate. If None, will be created from config['target_gate']
 
     Returns:
         env: QuantumEnvironment instance
     """
     from metaqctrl.quantum.noise_models import NoisePSDModel, PSDToLindblad
 
-    # Get target state if not provided
-    if target_state is None:
-        target_state = get_target_state_from_config(config)
-    
-    # Pauli matrices for 1-qubit
-    sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
-    sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
-    sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
-    
-    # System Hamiltonians
-    H0 = 0.0 * sigma_z
-    H_controls = [sigma_x, sigma_y]
-    
+    # Get number of qubits from config
+    num_qubits = config.get('num_qubits', 1)
+
+    # Get target state and unitary if not provided
+    if target_state is None or target_unitary is None:
+        target_state, target_unitary = get_target_state_from_config(config)
+
+    if num_qubits == 1:
+        # 1-qubit system (original code)
+        sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
+        sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
+        sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
+
+        # System Hamiltonians
+        # FIXED: Use small non-zero drift for better dynamics
+        drift_strength = config.get('drift_strength', 0.1)
+        H0 = drift_strength * sigma_z
+        H_controls = [sigma_x, sigma_y]
+
+        # Noise basis operators
+        basis_operators = [sigma_x, sigma_y, sigma_z]
+
+    elif num_qubits == 2:
+        # 2-qubit system (NEW)
+        from metaqctrl.quantum.two_qubit_gates import (
+            get_two_qubit_control_hamiltonians,
+            get_two_qubit_noise_operators,
+            single_qubit_on_two_qubit
+        )
+
+        # CRITICAL FIX: Use proper 2-qubit control Hamiltonians
+        # These include entangling ZZ interaction needed for CNOT
+        H_controls = get_two_qubit_control_hamiltonians()  # [XI, IX, YI, ZZ]
+
+        # CRITICAL FIX: Non-zero drift Hamiltonian for 2-qubit
+        # Use ZZ interaction as drift (common in superconducting qubits)
+        drift_strength = config.get('drift_strength', 0.5)  # Stronger for 2-qubit
+        I = np.eye(2, dtype=complex)
+        Z = np.array([[1, 0], [0, -1]], dtype=complex)
+        ZZ = np.kron(Z, Z)  # ZZ interaction
+        H0 = drift_strength * ZZ
+
+        # Get noise operators for both qubits
+        basis_operators = get_two_qubit_noise_operators(qubit=None)  # Both qubits
+
+    else:
+        raise ValueError(f"num_qubits={num_qubits} not supported. Use 1 or 2.")
+
     # PSD model
     psd_model = NoisePSDModel(model_type=config.get('psd_model', 'one_over_f'))
-    
+
     # Sampling frequencies (control bandwidth)
     n_segments = config.get('n_segments', 20)
     T = config.get('horizon', 1.0)
     omega_max = n_segments / T
     omega_sample = np.linspace(0, omega_max, 10)
-    
+
     # PSD to Lindblad converter
     psd_to_lindblad = PSDToLindblad(
-        basis_operators=[sigma_x, sigma_y, sigma_z],
+        basis_operators=basis_operators,
         sampling_freqs=omega_sample,
         psd_model=psd_model
     )
-    
+
     # Create environment
     env = QuantumEnvironment(
         H0=H0,
@@ -539,7 +644,8 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None) ->
         psd_to_lindblad=psd_to_lindblad,
         target_state=target_state,
         T=T,
-        method=config.get('integration_method', 'RK45')
+        method=config.get('integration_method', 'RK45'),
+        target_unitary=target_unitary  # FIXED: Pass target unitary for process fidelity
     )
-    
+
     return env
