@@ -25,7 +25,7 @@ from copy import deepcopy
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from metaqctrl.meta_rl.maml import MAML
-from metaqctrl.meta_rl.policy import QuantumControlPolicy
+from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters
 from metaqctrl.theory.quantum_environment import QuantumEnvironment
 
@@ -105,8 +105,8 @@ def test_gradient_flow():
     device = torch.device('cpu')
 
     # Create simple policy
-    policy = QuantumControlPolicy(
-        task_dim=3,
+    policy = PulsePolicy(
+        task_feature_dim=3,
         hidden_dim=32,
         n_segments=20,
         n_controls=2
@@ -166,7 +166,7 @@ def test_gradient_magnitude():
 
     device = torch.device('cpu')
 
-    policy = QuantumControlPolicy(task_dim=3, hidden_dim=32, n_segments=20, n_controls=2).to(device)
+    policy = PulsePolicy(task_feature_dim=3, hidden_dim=32, n_segments=20, n_controls=2).to(device)
 
     # Test with different batch sizes
     batch_sizes = [2, 4, 8]
@@ -208,7 +208,7 @@ def test_training_stability():
 
     device = torch.device('cpu')
 
-    policy = QuantumControlPolicy(task_dim=3, hidden_dim=32, n_segments=20, n_controls=2).to(device)
+    policy = PulsePolicy(task_feature_dim=3, hidden_dim=32, n_segments=20, n_controls=2).to(device)
     maml = MAML(policy=policy, inner_lr=0.01, inner_steps=3, meta_lr=0.001, first_order=True, device=device)
 
     env = create_test_environment()
@@ -283,7 +283,7 @@ def test_adaptation_performance():
 
     device = torch.device('cpu')
 
-    policy = QuantumControlPolicy(task_dim=3, hidden_dim=32, n_segments=20, n_controls=2).to(device)
+    policy = PulsePolicy(task_feature_dim=3, hidden_dim=32, n_segments=20, n_controls=2).to(device)
     maml = MAML(policy=policy, inner_lr=0.01, inner_steps=5, meta_lr=0.001, first_order=True, device=device)
 
     env = create_test_environment()
