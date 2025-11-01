@@ -69,9 +69,7 @@ def run_gap_vs_k_experiment(
     Args:
         task_dist_config: Dict with 'alpha_range', 'A_range', 'omega_c_range'
     """
-   # print(f"Running gap vs K experiment...")
-   # #print(f"  Task ranges: α={task_dist_config['alpha_range']}, "
-   #       f"A={task_dist_config['A_range']}, ω_c={task_dist_config['omega_c_range']}")
+
 
     # Load policies
     meta_policy_template = load_policy_from_checkpoint(

@@ -18,9 +18,6 @@ from typing import Dict, List, Tuple
 from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score
 
-# Add src to path
-#sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-
 from metaqctrl.quantum.lindblad import LindbladSimulator
 from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters, PSDToLindblad
 from metaqctrl.quantum.gates import state_fidelity
@@ -111,7 +108,7 @@ def run_gap_vs_variance_experiment(
     K_fixed: int = 5,
     n_test_tasks: int = 100,
     output_dir: str = "results/gap_vs_variance",
-    include_grape: bool = True,
+    include_grape: bool = False,
     grape_iterations: int = 100
 ) -> Dict:
     """

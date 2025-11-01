@@ -36,7 +36,8 @@ def create_quantum_system(config: dict):
     psd_model = NoisePSDModel(model_type=config.get('psd_model', 'one_over_f'))
     
     # Sampling frequencies ==> define 3 sample frequencies 
-    omega_sample = np.array([1.0, 5.0, 10.0])
+    #omega_sample = np.array([1.0, 5.0, 10.0])
+    omega_sample = np.linspace(1,1e5,1000)
     
     # PSD to Lindblad converter
     psd_to_lindblad = PSDToLindblad(
@@ -157,7 +158,7 @@ def main(config_path: str):
     print(f"Device: {device}\n")
     
     # Target gate (e.g., Hadamard)
-    ## Establish target operation  
+    ## Establish target operation  --> trained to optimize a pauli-x operator  
     target_gate_name = config.get('target_gate', 'pauli_x')
     if target_gate_name == 'hadamard':
         U_target = TargetGates.hadamard()
@@ -252,9 +253,8 @@ def main(config_path: str):
     
     # Create save directory
     save_dir = Path(config.get('save_dir', 'checkpoints'))
-    save_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    save_path = save_dir / f"maml_{timestamp}.pt"
+    save_dir.mkdir(parents=True, exist_ok=True) 
+    save_path = save_dir / f"maml_best_pauli_x.pt"
     
     print(f"\nCheckpoints will be saved to: {save_path}")
     
@@ -264,9 +264,9 @@ def main(config_path: str):
     print("=" * 70 + "\n")
     
     trainer.train(
-        n_iterations=config.get('n_iterations', 50),
-        tasks_per_batch=config.get('tasks_per_batch', 5),
-        val_tasks=config.get('val_tasks', 5),
+        n_iterations=config.get('n_iterations', 200),
+        tasks_per_batch=config.get('tasks_per_batch', 15),
+        val_tasks=config.get('val_tasks', 15),
         save_path=str(save_path)
     )
     
@@ -283,7 +283,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--config',
         type=str,
-        default='../configs/experiment_config.yaml',
+        default='../../configs/experiment_config.yaml',
         help='Path to config file'
     )
     

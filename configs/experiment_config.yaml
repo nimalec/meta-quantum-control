@@ -13,32 +13,32 @@ task_dist_type: 'uniform'
 
 alpha_range: [0.5, 2.0]      # Spectral exponent range
 A_range: [0.001, 0.01]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
-omega_c_range: [2.0, 10.0]    # Cutoff frequency range
+omega_c_range: [100, 1e3]    # Cutoff frequency range
 
 
 # Policy Network
 task_feature_dim: 3
 hidden_dim: 128
-n_hidden_layers: 1
+n_hidden_layers: 2
 n_segments: 20
 n_controls: 2
 output_scale: 2.0  # FIXED: Increased from 1.0 to allow stronger control signals for better gate fidelity
 activation: 'tanh'
 
 # MAML Hyperparameters
-inner_lr: 0.01  # FIXED: Further reduced from 0.005 for stable gradients with differentiable simulator
-inner_steps: 1   # FIXED: Increased from 3 to allow sufficient adaptation (meta-learning needs this!)
-meta_lr: 0.01 
+inner_lr: 0.02  # FIXED: Further reduced from 0.005 for stable gradients with differentiable simulator
+inner_steps: 10   # FIXED: Increased from 3 to allow sufficient adaptation (meta-learning needs this!)
+meta_lr: 0.02 
 first_order: true  # FIXED: Use FOMAML initially to avoid complex eigenvalue gradient issues
 
 # Training
-n_iterations: 50
-tasks_per_batch: 5  # FIXED: Increased from 4 for more stable meta-gradient estimates
+n_iterations: 1000
+tasks_per_batch: 200  # FIXED: Increased from 4 for more stable meta-gradient estimates
 n_support: 2
 n_query: 2
-log_interval: 10
+log_interval: 50
 val_interval: 50
-val_tasks: 5
+val_tasks: 100
 
 # Checkpointing
 save_dir: 'checkpoints'
