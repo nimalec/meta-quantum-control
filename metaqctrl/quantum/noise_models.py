@@ -250,6 +250,7 @@ class TaskDistribution:
             # Variance of uniform: (b-a)²/12 for each dimension
             var_alpha = ((self.ranges['alpha'][1] - self.ranges['alpha'][0])**2) / 12
             var_A = ((self.ranges['A'][1] - self.ranges['A'][0])**2) / 12
+            print()
             var_omega = ((self.ranges['omega_c'][1] - self.ranges['omega_c'][0])**2) / 12
             return var_alpha + var_A + var_omega
         elif self.dist_type == 'gaussian':

@@ -13,7 +13,7 @@ task_dist_type: 'uniform'
 
 alpha_range: [0.5, 2.0]      # Spectral exponent range
 A_range: [0.001, 0.01]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
-omega_c_range: [100, 1e3]    # Cutoff frequency range
+omega_c_range: [100, 1000]    # Cutoff frequency range
 
 
 # Policy Network
