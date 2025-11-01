@@ -18,8 +18,8 @@ omega_c_range: [100, 1000]    # Cutoff frequency range
 
 # Policy Network
 task_feature_dim: 3
-hidden_dim: 128
-n_hidden_layers: 2
+hidden_dim: 64
+n_hidden_layers: 1
 n_segments: 20
 n_controls: 2
 output_scale: 2.0  # FIXED: Increased from 1.0 to allow stronger control signals for better gate fidelity
@@ -32,13 +32,13 @@ meta_lr: 0.02
 first_order: true  # FIXED: Use FOMAML initially to avoid complex eigenvalue gradient issues
 
 # Training
-n_iterations: 1000
-tasks_per_batch: 200  # FIXED: Increased from 4 for more stable meta-gradient estimates
+n_iterations: 60
+tasks_per_batch: 10  # FIXED: Increased from 4 for more stable meta-gradient estimates
 n_support: 2
 n_query: 2
-log_interval: 50
-val_interval: 50
-val_tasks: 100
+log_interval: 2
+val_interval: 2
+val_tasks: 5
 
 # Checkpointing
 save_dir: 'checkpoints'
