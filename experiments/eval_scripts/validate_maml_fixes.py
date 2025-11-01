@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from metaqctrl.meta_rl.maml import MAML
 from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters
-from metaqctrl.theory.quantum_environment import QuantumEnvironment
+from metaqctrl.theory.quantum_environment import create_quantum_environment
 
 
 def create_test_environment():
@@ -37,12 +37,12 @@ def create_test_environment():
     config = {
         'n_segments': 20,
         'horizon': 1.0,
-        'target_gate': 'X',
+        'target_gate': 'pauli_x',  # Fixed: Use 'pauli_x' instead of 'X'
         'psd_model': 'one_over_f',
-        'method': 'rk4'
+        'integration_method': 'RK45'  # Fixed: Use correct key name
     }
 
-    env = QuantumEnvironment(config)
+    env = create_quantum_environment(config)
     print("✓ Environment created")
     return env
 
@@ -178,8 +178,12 @@ def test_gradient_magnitude():
 
     grad_norms = []
 
+    # Save initial policy state
+    initial_state = deepcopy(policy.state_dict())
+
     for batch_size in batch_sizes:
-        # Reset policy
+        # Reset policy to initial state for fair comparison
+        policy.load_state_dict(initial_state)
         for param in policy.parameters():
             param.grad = None
 
