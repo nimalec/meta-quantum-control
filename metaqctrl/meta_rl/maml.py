@@ -229,12 +229,13 @@ class MAML:
                     )
 
                     # Manually accumulate gradients to meta-parameters
+                    # FIXED: Added .clone() to prevent gradient aliasing issues
                     for meta_param, adapted_grad in zip(meta_params, adapted_grads):
                         if adapted_grad is not None:
                             if meta_param.grad is None:
-                                meta_param.grad = adapted_grad
+                                meta_param.grad = adapted_grad.clone()
                             else:
-                                meta_param.grad = meta_param.grad + adapted_grad
+                                meta_param.grad = meta_param.grad + adapted_grad.clone()
 
             else:
                 # First-order MAML - use manual gradient computation
@@ -302,12 +303,13 @@ class MAML:
                         print("Install with: pip install higher")
                         self._warned_no_higher = True
 
-            # NEW: Check for NaN/Inf
+            # FIXED: Check for NaN/Inf and skip task entirely to avoid gradient issues
             if torch.isnan(query_loss) or torch.isinf(query_loss):
                 print(f"WARNING: Invalid loss detected (NaN or Inf): {query_loss.item()}")
                 print(f"  Inner losses: {inner_losses}")
-                # Skip this task or use fallback value
-                query_loss = torch.tensor(1.0, device=self.device, requires_grad=False)
+                print(f"  Skipping this task to preserve gradient flow")
+                # Skip this task - don't accumulate it
+                continue
 
             # CRITICAL FIX: Accumulate query losses as tensors to preserve gradient graph
             if meta_loss_tensor is None:
@@ -317,8 +319,23 @@ class MAML:
 
             task_losses.append(query_loss.item())
 
-        # Average over tasks
-        meta_loss_tensor = meta_loss_tensor / len(task_batch)
+        # FIXED: Properly handle averaging - avoid double averaging
+        # Count how many tasks actually contributed (some may have been skipped due to NaN)
+        n_valid_tasks = len(task_losses)
+
+        if n_valid_tasks == 0:
+            print("ERROR: No valid tasks in batch (all were NaN/Inf)")
+            return {
+                'meta_loss': float('nan'),
+                'mean_task_loss': float('nan'),
+                'std_task_loss': float('nan'),
+                'min_task_loss': float('nan'),
+                'max_task_loss': float('nan'),
+                'error': 'no_valid_tasks'
+            }
+
+        # Average accumulated loss over valid tasks
+        meta_loss_tensor = meta_loss_tensor / n_valid_tasks
         meta_loss = meta_loss_tensor.item()
 
         # NEW: Check meta_loss before backward
@@ -335,11 +352,11 @@ class MAML:
             }
 
         # Meta-gradient step
-        # Gradients have been manually accumulated via autograd.grad()
-        # Now average them over the task batch
+        # FIXED: Gradients have been manually accumulated via autograd.grad()
+        # Now average them over the valid task count (not double-averaging with loss)
         for param in self.policy.parameters():
             if param.grad is not None:
-                param.grad = param.grad / len(task_batch)
+                param.grad = param.grad / n_valid_tasks
 
         # NEW: Check gradients for NaN/Inf
         grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
@@ -380,27 +397,30 @@ class MAML:
         """
         self.policy.eval()
 
-        val_losses = []
-        adapted_losses = []
+        # FIXED: Use try-finally to ensure policy mode is always restored
+        try:
+            val_losses = []
+            adapted_losses = []
 
-        # FIXED: Don't use no_grad during validation - we need gradients for inner loop!
-        # We just won't backprop to the meta-parameters (deepcopy handles this)
-        for task_data in val_tasks:
-            # Loss before adaptation (can be done without grad)
-            with torch.no_grad():
-                pre_loss = loss_fn(self.policy, task_data['query'])
-                val_losses.append(pre_loss.item())
+            # FIXED: Don't use no_grad during validation - we need gradients for inner loop!
+            # We just won't backprop to the meta-parameters (deepcopy handles this)
+            for task_data in val_tasks:
+                # Loss before adaptation (can be done without grad)
+                with torch.no_grad():
+                    pre_loss = loss_fn(self.policy, task_data['query'])
+                    val_losses.append(pre_loss.item())
 
-            # Adapt on support set (NEEDS gradients for inner loop!)
-            # Note: inner_loop uses a deepcopy, so meta-parameters won't be affected
-            adapted_policy, _ = self.inner_loop(task_data, loss_fn)
+                # Adapt on support set (NEEDS gradients for inner loop!)
+                # Note: inner_loop uses a deepcopy, so meta-parameters won't be affected
+                adapted_policy, _ = self.inner_loop(task_data, loss_fn)
 
-            # Loss after adaptation (no grad needed)
-            with torch.no_grad():
-                post_loss = loss_fn(adapted_policy, task_data['query'])
-                adapted_losses.append(post_loss.item())
-
-        self.policy.train()
+                # Loss after adaptation (no grad needed)
+                with torch.no_grad():
+                    post_loss = loss_fn(adapted_policy, task_data['query'])
+                    adapted_losses.append(post_loss.item())
+        finally:
+            # Always restore train mode, even if exception occurs
+            self.policy.train()
 
         metrics = {
             'val_loss_pre_adapt': np.mean(val_losses),

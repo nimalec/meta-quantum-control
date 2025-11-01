@@ -398,48 +398,254 @@ class OptimalityGapComputer:
         return grad_norm
 
 
+def plot_gap_vs_control_relevant_variance(
+    gap_computer: OptimalityGapComputer,
+    meta_policy: torch.nn.Module,
+    robust_policy: torch.nn.Module,
+    env,
+    variance_range: np.ndarray,
+    K: int = 5,
+    n_samples: int = 50,
+    base_mean: np.ndarray = None,
+    eta: float = 0.01,
+    save_path: Optional[str] = None
+):
+    """ NEW: Plot gap vs CONTROL-RELEVANT variance σ²_S (not parameter variance σ²_θ).
+
+    This uses the physically correct variance metric that accounts for how noise
+    affects the quantum dynamics through the control bandwidth.
+
+    Args:
+        gap_computer: OptimalityGapComputer instance
+        meta_policy: Meta-learned policy
+        robust_policy: Robust baseline policy
+        env: QuantumEnvironment instance (needed for PSD integration)
+        variance_range: Array of variance values to test
+        K: Number of adaptation steps
+        n_samples: Number of tasks to sample per variance level
+        base_mean: Mean task parameters (default: [1.0, 0.1, 5.0])
+        eta: Learning rate for adaptation
+        save_path: Path to save plot
+    """
+    import matplotlib.pyplot as plt
+    from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters
+    from metaqctrl.theory.physics_constants import compute_control_relevant_variance
+
+    if base_mean is None:
+        base_mean = np.array([1.0, 0.1, 5.0])  # (alpha, A, omega_c)
+
+    gaps = []
+    param_variances = []  # σ²_θ
+    control_variances = []  # σ²_S
+
+    for sigma_sq in variance_range:
+        width = np.sqrt(12 * sigma_sq / 3)
+
+        task_dist = TaskDistribution(
+            dist_type='uniform',
+            ranges={
+                'alpha': (max(0.1, base_mean[0] - width/2), base_mean[0] + width/2),
+                'A': (max(0.001, base_mean[1] - width/2), base_mean[1] + width/2),
+                'omega_c': (max(0.1, base_mean[2] - width/2), base_mean[2] + width/2)
+            }
+        )
+
+        rng = np.random.default_rng()
+        tasks = task_dist.sample(n_samples, rng)
+
+        # Compute BOTH variances
+        param_var = task_dist.compute_variance()
+        control_var = compute_control_relevant_variance(env, tasks)
+
+        param_variances.append(param_var)
+        control_variances.append(control_var)
+
+        # Compute gap
+        gap_result = gap_computer.compute_gap(
+            meta_policy, robust_policy, task_distribution=tasks,
+            n_samples=n_samples, K=K
+        )
+        gaps.append(gap_result['gap'])
+
+        print(f"σ²_θ = {param_var:.4f}, σ²_S = {control_var:.4f}, Gap = {gap_result['gap']:.6f}")
+
+    gaps = np.array(gaps)
+    param_variances = np.array(param_variances)
+    control_variances = np.array(control_variances)
+
+    # Create two subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+    # Plot 1: Gap vs Parameter Variance σ²_θ
+    ax1.plot(param_variances, gaps, 'o-', linewidth=2, markersize=8, label='Empirical Gap')
+    from scipy.stats import linregress
+    slope1, intercept1, r_value1, _, _ = linregress(param_variances, gaps)
+    fit_line1 = slope1 * param_variances + intercept1
+    ax1.plot(param_variances, fit_line1, '--', linewidth=2, alpha=0.7,
+             label=f'Linear Fit (R² = {r_value1**2:.3f})')
+    ax1.set_xlabel('Parameter Variance σ²_θ', fontsize=12)
+    ax1.set_ylabel('Optimality Gap', fontsize=12)
+    ax1.set_title('Gap vs Parameter Variance', fontsize=14)
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+
+    # Plot 2: Gap vs Control-Relevant Variance σ²_S
+    ax2.plot(control_variances, gaps, 'o-', linewidth=2, markersize=8, color='orange', label='Empirical Gap')
+    slope2, intercept2, r_value2, _, _ = linregress(control_variances, gaps)
+    fit_line2 = slope2 * control_variances + intercept2
+    ax2.plot(control_variances, fit_line2, '--', linewidth=2, alpha=0.7, color='red',
+             label=f'Linear Fit (R² = {r_value2**2:.3f})')
+    ax2.set_xlabel('Control-Relevant Variance σ²_S', fontsize=12)
+    ax2.set_ylabel('Optimality Gap', fontsize=12)
+    ax2.set_title('Gap vs Control-Relevant Variance', fontsize=14)
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+
+    plt.suptitle(f'Adaptation Gap Scaling (K={K} steps)', fontsize=16)
+    plt.tight_layout()
+
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"\nPlot saved to {save_path}")
+
+    plt.show()
+
+    print(f"\n{'='*60}")
+    print(f"VARIANCE SCALING ANALYSIS:")
+    print(f"{'='*60}")
+    print(f"Gap vs σ²_θ (parameter variance):  R² = {r_value1**2:.4f}, slope = {slope1:.6f}")
+    print(f"Gap vs σ²_S (control variance):    R² = {r_value2**2:.4f}, slope = {slope2:.6f}")
+    print(f"\nBetter fit: {'σ²_S (control-relevant)' if r_value2**2 > r_value1**2 else 'σ²_θ (parameter)'}")
+    print(f"{'='*60}")
+
+    return {
+        'param_variances': param_variances,
+        'control_variances': control_variances,
+        'gaps': gaps,
+        'param_r_squared': r_value1**2,
+        'control_r_squared': r_value2**2,
+        'param_slope': slope1,
+        'control_slope': slope2
+    }
+
+
 def plot_gap_vs_variance(
     gap_computer: OptimalityGapComputer,
     meta_policy: torch.nn.Module,
     robust_policy: torch.nn.Module,
     variance_range: np.ndarray,
     K: int = 5,
+    n_samples: int = 50,
+    base_mean: np.ndarray = None,
+    eta: float = 0.01,
     save_path: Optional[str] = None
 ):
-    """ Good. 
+    """ FIXED: Properly creates task distributions with varying variance.
     Plot empirical gap vs task variance and compare to theory.
-    
+
     Theory predicts: Gap ∝ σ²_θ
+
+    Args:
+        gap_computer: OptimalityGapComputer instance
+        meta_policy: Meta-learned policy
+        robust_policy: Robust baseline policy
+        variance_range: Array of variance values to test
+        K: Number of adaptation steps
+        n_samples: Number of tasks to sample per variance level
+        base_mean: Mean task parameters (default: [1.0, 0.1, 5.0])
+        eta: Learning rate for adaptation
+        save_path: Path to save plot
     """
     import matplotlib.pyplot as plt
-    
+    from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters
+
+    if base_mean is None:
+        base_mean = np.array([1.0, 0.1, 5.0])  # (alpha, A, omega_c)
+
     gaps = []
+    empirical_variances = []
+
     for sigma_sq in variance_range:
-        # Generate task distribution with this variance
-        # (Implementation depends on your task sampler)
-        # For now, placeholder
+        # FIXED: Create task distribution with specified variance
+        # For uniform distribution, if we want variance σ²,
+        # and uniform variance is (b-a)²/12, then (b-a) = √(12σ²)
+        # We create symmetric ranges around the mean
+
+        width = np.sqrt(12 * sigma_sq / 3)  # Divide by 3 because we have 3 dimensions
+
+        # Create ranges symmetric around mean
+        task_dist = TaskDistribution(
+            dist_type='uniform',
+            ranges={
+                'alpha': (max(0.1, base_mean[0] - width/2), base_mean[0] + width/2),
+                'A': (max(0.001, base_mean[1] - width/2), base_mean[1] + width/2),
+                'omega_c': (max(0.1, base_mean[2] - width/2), base_mean[2] + width/2)
+            }
+        )
+
+        # Sample tasks from this distribution
+        rng = np.random.default_rng()
+        tasks = task_dist.sample(n_samples, rng)
+
+        # Verify actual variance
+        actual_variance = task_dist.compute_variance()
+        empirical_variances.append(actual_variance)
+
+        # Compute gap for this variance level
         gap_result = gap_computer.compute_gap(
-            meta_policy, robust_policy, task_distribution=[], n_samples=50, K=K
+            meta_policy, robust_policy, task_distribution=tasks,
+            n_samples=n_samples, K=K
         )
         gaps.append(gap_result['gap'])
-    
+
+        print(f"σ² = {sigma_sq:.4f} (actual: {actual_variance:.4f}), Gap = {gap_result['gap']:.6f}")
+
+    gaps = np.array(gaps)
+    empirical_variances = np.array(empirical_variances)
+
     # Plot
-    plt.figure(figsize=(8, 6))
-    plt.plot(variance_range, gaps, 'o-', label='Empirical Gap')
-    
-    # Theoretical prediction (if constants known)
-    # gaps_theory = constants.gap_lower_bound(variance_range, K, eta)
-    # plt.plot(variance_range, gaps_theory, '--', label='Theory Lower Bound')
-    
-    plt.xlabel('Task Variance σ²_θ')
-    plt.ylabel('Optimality Gap')
-    plt.title(f'Gap vs Task Variance (K={K})')
-    plt.legend()
+    plt.figure(figsize=(10, 6))
+    plt.plot(empirical_variances, gaps, 'o-', linewidth=2, markersize=8, label='Empirical Gap')
+
+    # Fit linear relationship
+    from scipy.stats import linregress
+    slope, intercept, r_value, p_value, std_err = linregress(empirical_variances, gaps)
+    fit_line = slope * empirical_variances + intercept
+    plt.plot(empirical_variances, fit_line, '--', linewidth=2, alpha=0.7,
+             label=f'Linear Fit: Gap = {slope:.4f}·σ² + {intercept:.4f}\n(R² = {r_value**2:.3f})')
+
+    # Theoretical prediction (if constants are available)
+    if hasattr(gap_computer, 'C_sep') and hasattr(gap_computer, 'L_F'):
+        c_gap = gap_computer.C_sep * gap_computer.L_F * gap_computer.L ** 2
+        mu = gap_computer.mu
+        gaps_theory = c_gap * empirical_variances * (1 - np.exp(-mu * eta * K))
+        plt.plot(empirical_variances, gaps_theory, ':', linewidth=2,
+                 label=f'Theory: Gap = {c_gap:.4f}·σ²·(1-e^(-μηK))')
+
+    plt.xlabel('Task Variance σ²_θ', fontsize=12)
+    plt.ylabel('Optimality Gap (1 - Fidelity)', fontsize=12)
+    plt.title(f'Gap vs Task Variance (K={K} adaptation steps)', fontsize=14)
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
-    
+
+    # Add text box with statistics
+    textstr = f'Slope: {slope:.6f}\nIntercept: {intercept:.6f}\nR²: {r_value**2:.4f}'
+    plt.text(0.05, 0.95, textstr, transform=plt.gca().transAxes, fontsize=10,
+             verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"\nPlot saved to {save_path}")
+
     plt.show()
+
+    return {
+        'variances': empirical_variances,
+        'gaps': gaps,
+        'slope': slope,
+        'intercept': intercept,
+        'r_squared': r_value**2
+    }
 
 
 # Example usage

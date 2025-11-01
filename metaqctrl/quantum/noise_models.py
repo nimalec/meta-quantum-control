@@ -5,6 +5,37 @@ Tasks are parameterized by power spectral density (PSD) of noise:
 S(ω; θ) where θ = (α, A, ωc) controls spectral shape.
 
 This induces Lindblad operators L_j,θ via filter/correlation functions.
+
+IMPORTANT IMPLEMENTATION NOTES:
+-------------------------------
+
+Physically Correct PSD to Lindblad Conversion:
+The decay rate for each noise channel must be computed by integrating the PSD
+over the control-relevant frequency band:
+
+    Γ_j = ∫ S(ω; θ) |χ_j(ω)|² dω
+
+where:
+- S(ω; θ) is the noise power spectral density
+- χ_j(ω) is the filter/susceptibility function for channel j
+- The integral is taken over the control bandwidth [0, ω_max]
+
+This replaces the previous simplified approach of evaluating S at a single point.
+
+The filter function χ_j(ω) represents how sensitive the quantum system is to
+noise at frequency ω on channel j. For typical quantum control:
+- Use 'uniform' filter: boxcar over control bandwidth (default, most physical)
+- Use 'lorentzian' filter: for systems with resonant coupling
+- Use 'gaussian' filter: for smooth frequency response
+
+Units and Normalization:
+- PSD S(ω): power per unit frequency [dimensionless or power/Hz]
+- Integrated rate Γ_j: decay rate per unit time [Hz or rad/s]
+- Lindblad operators L_j = √Γ_j * σ_j: [√Hz] * [dimensionless]
+- Properly normalized for Lindblad equation: dρ/dt = Σ_j (L_j ρ L_j† - ½{L_j†L_j, ρ})
+
+For backward compatibility, set integration_method='point' to use old single-point
+evaluation (not recommended for physical accuracy).
 """
 
 import numpy as np
@@ -118,38 +149,114 @@ class NoisePSDModel:
 
 
 class PSDToLindblad:
-    """Good. 
+    """Good.
     Convert PSD parameters to Lindblad operators.
-    
+
     Approaches:
     1. Phenomenological: L_j,θ = sqrt(Γ_j(θ)) * σ_j where Γ_j ∝ S(ω_j)
     2. Spectral decomposition: Sample PSD at control-relevant frequencies
     3. Filter-based: Design filter with frequency response matching PSD
+
+    Physically correct conversion integrates PSD over control bandwidth:
+    Γ_j = ∫ S(ω) |χ_j(ω)|² dω
+    where χ_j(ω) is the susceptibility/filter function for channel j.
     """
-    
+
     def __init__(
         self,
         basis_operators: List[np.ndarray],
         sampling_freqs: np.ndarray,
-        psd_model: NoisePSDModel
+        psd_model: NoisePSDModel,
+        integration_method: str = 'trapz',
+        omega_integration_range: Tuple[float, float] = None,
+        n_integration_points: int = 500
         ):
         """
         Args:
             basis_operators: Pauli operators [σx, σy, σz] or other basis
-            sampling_freqs: Frequencies at which to sample PSD
+            sampling_freqs: Frequencies defining control bandwidth (for filter function)
             psd_model: PSD model instance
+            integration_method: 'trapz' (trapezoidal), 'simpson', or 'point' (old behavior)
+            omega_integration_range: (omega_min, omega_max) for integration.
+                                     If None, uses (0, max(sampling_freqs))
+            n_integration_points: Number of frequency points for numerical integration
         """
         self.basis_ops = basis_operators
         self.sampling_freqs = sampling_freqs
         self.psd_model = psd_model
+        self.integration_method = integration_method
+        self.n_integration_points = n_integration_points
+
+        # Set integration range based on control bandwidth
+        if omega_integration_range is None:
+            omega_max = np.max(sampling_freqs) if len(sampling_freqs) > 0 else 20.0
+            # Extend slightly beyond Nyquist to capture tail
+            self.omega_integration_range = (0.0, 2.0 * omega_max)
+        else:
+            self.omega_integration_range = omega_integration_range
     
+    def _filter_function(self, omega: np.ndarray, channel_idx: int) -> np.ndarray:
+        """
+        Compute filter function |χ_j(ω)|² for channel j.
+
+        Options:
+        1. 'uniform': Boxcar filter over control bandwidth (default, physically motivated)
+        2. 'lorentzian': Lorentzian response (for specific resonant coupling)
+        3. 'custom': User-provided filter function
+
+        For most quantum control applications, 'uniform' is appropriate as it represents
+        uniform susceptibility to noise across the control bandwidth.
+
+        Args:
+            omega: Frequency array (rad/s)
+            channel_idx: Index of noise channel
+
+        Returns:
+            chi_squared: |χ_j(ω)|² filter function values
+        """
+        filter_type = getattr(self, 'filter_type', 'uniform')
+        omega_max = np.max(self.sampling_freqs) if len(self.sampling_freqs) > 0 else 20.0
+
+        if filter_type == 'uniform':
+            # Boxcar filter: uniform susceptibility in control band
+            chi_squared = np.where(
+                (omega >= 0) & (omega <= omega_max),
+                1.0,  # Constant susceptibility in band
+                0.0   # No response outside band
+            )
+
+        elif filter_type == 'lorentzian':
+            # Lorentzian filter centered at control bandwidth
+            # Useful for resonant noise coupling
+            omega_center = omega_max / 2
+            width = omega_max / 4
+            chi_squared = width**2 / ((omega - omega_center)**2 + width**2)
+
+        elif filter_type == 'gaussian':
+            # Gaussian filter centered at control bandwidth
+            omega_center = omega_max / 2
+            sigma = omega_max / 4
+            chi_squared = np.exp(-((omega - omega_center)**2) / (2 * sigma**2))
+
+        else:
+            # Default to uniform
+            chi_squared = np.where(
+                (omega >= 0) & (omega <= omega_max),
+                1.0,
+                0.0
+            )
+
+        return chi_squared
+
     def get_lindblad_operators(self, theta: NoiseParameters):
-        """Good. 
+        """Good.
         Get Lindblad operators for given task parameters.
 
-        Map to dissipation rates (phenomenological):
-        Γ_j ∝ ∫ S(ω) |H_j(ω)|² dω where H_j is filter response
-        For simplicity: Γ_j = S(ω_j) at characteristic frequency
+        Physically correct mapping to dissipation rates:
+        Γ_j = ∫ S(ω; θ) |χ_j(ω)|² dω
+        where χ_j(ω) is the filter/susceptibility function for channel j.
+
+        For backward compatibility, set integration_method='point' to use old behavior.
 
         Args:
             theta: NoiseParameters with (alpha, A, omega_c)
@@ -157,24 +264,90 @@ class PSDToLindblad:
         Returns:
             L_ops: List of Lindblad operators [L_1, L_2, ...]
         """
-        # Evaluate PSD at sampling frequencies
-        S_values = self.psd_model.psd(self.sampling_freqs, theta)
+        if self.integration_method == 'point':
+            # Old behavior: single-point evaluation (for backward compatibility)
+            S_values = self.psd_model.psd(self.sampling_freqs, theta)
+            L_ops = []
+            for j, sigma in enumerate(self.basis_ops):
+                freq_idx = min(j, len(self.sampling_freqs) - 1)
+                gamma_j = S_values[freq_idx]
+                L_ops.append(np.sqrt(gamma_j) * sigma)
+            return L_ops
+
+        # New behavior: proper frequency integration
+        omega_min, omega_max = self.omega_integration_range
+        omega_grid = np.linspace(omega_min, omega_max, self.n_integration_points)
+
+        # Evaluate PSD over full frequency range
+        S_omega = self.psd_model.psd(omega_grid, theta)
 
         L_ops = []
         for j, sigma in enumerate(self.basis_ops):
-            # Use PSD value at corresponding frequency
-            freq_idx = min(j, len(self.sampling_freqs) - 1)
-            gamma_j = S_values[freq_idx]
+            # Compute filter function for this channel
+            chi_squared = self._filter_function(omega_grid, j)
 
-            # Lindblad operator: L_j = sqrt(Γ_j) * σ_j
-            L_ops.append(np.sqrt(gamma_j) * sigma)
+            # Integrate: Γ_j = ∫ S(ω) |χ_j(ω)|² dω
+            integrand = S_omega * chi_squared
+
+            if self.integration_method == 'trapz':
+                gamma_j = np.trapz(integrand, omega_grid)
+            elif self.integration_method == 'simpson':
+                from scipy.integrate import simpson
+                gamma_j = simpson(integrand, x=omega_grid)
+            else:
+                raise ValueError(f"Unknown integration method: {self.integration_method}")
+
+            # Ensure non-negative rate (numerical errors can cause small negative values)
+            gamma_j = max(gamma_j, 0.0)
+
+            # Lindblad operator: L_j = sqrt(Γ_j / Δω) * σ_j
+            # Note: normalization by Δω = omega_max - omega_min converts
+            # integrated PSD to effective rate per unit time
+            bandwidth = omega_max - omega_min
+            if bandwidth > 0:
+                gamma_j_normalized = gamma_j / bandwidth
+            else:
+                gamma_j_normalized = gamma_j
+
+            L_ops.append(np.sqrt(gamma_j_normalized) * sigma)
 
         return L_ops
     
     def get_effective_rates(self, theta: NoiseParameters) -> np.ndarray:
-        """Get effective decay rates for each channel."""
-        S_values = self.psd_model.psd(self.sampling_freqs, theta)
-        return S_values
+        """
+        Get effective decay rates for each channel.
+
+        Returns:
+            rates: Array of Γ_j values for each channel
+        """
+        if self.integration_method == 'point':
+            # Old behavior: point evaluation
+            S_values = self.psd_model.psd(self.sampling_freqs, theta)
+            return S_values
+
+        # New behavior: integrated rates
+        omega_min, omega_max = self.omega_integration_range
+        omega_grid = np.linspace(omega_min, omega_max, self.n_integration_points)
+        S_omega = self.psd_model.psd(omega_grid, theta)
+
+        rates = []
+        for j in range(len(self.basis_ops)):
+            chi_squared = self._filter_function(omega_grid, j)
+            integrand = S_omega * chi_squared
+
+            if self.integration_method == 'trapz':
+                gamma_j = np.trapz(integrand, omega_grid)
+            elif self.integration_method == 'simpson':
+                from scipy.integrate import simpson
+                gamma_j = simpson(integrand, x=omega_grid)
+            else:
+                gamma_j = 0.0
+
+            bandwidth = omega_max - omega_min
+            gamma_j_normalized = gamma_j / bandwidth if bandwidth > 0 else gamma_j
+            rates.append(max(gamma_j_normalized, 0.0))
+
+        return np.array(rates)
 
 
 class TaskDistribution:
@@ -250,7 +423,6 @@ class TaskDistribution:
             # Variance of uniform: (b-a)²/12 for each dimension
             var_alpha = ((self.ranges['alpha'][1] - self.ranges['alpha'][0])**2) / 12
             var_A = ((self.ranges['A'][1] - self.ranges['A'][0])**2) / 12
-            print()
             var_omega = ((self.ranges['omega_c'][1] - self.ranges['omega_c'][0])**2) / 12
             return var_alpha + var_A + var_omega
         elif self.dist_type == 'gaussian':
