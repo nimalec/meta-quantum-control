@@ -16,7 +16,8 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ### Installation
 ```bash
 # Install dependencies (creates .venv and installs all packages from pyproject.toml)
-uv sync
+export UV_NATIVE_TLS=true         
+uv sync --active
 
 # Activate the environment
 source .venv/bin/activate  # Mac/Linux
