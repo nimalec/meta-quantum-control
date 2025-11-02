@@ -458,8 +458,7 @@ class QuantumEnvironment:
         issues with complex matrices. For nearly pure states (as in gate optimization),
         this is a good approximation.
 
-        GRADIENT FIX: Avoid torch.linalg.eigh on complex matrices entirely to prevent
-        gradient issues. Use trace-based approximation instead.
+        GRADIENT FIX: Use torch.abs() instead of .real/.imag to maintain gradient flow!
 
         Args:
             rho: Density matrix (d x d) complex tensor
@@ -468,17 +467,16 @@ class QuantumEnvironment:
         Returns:
             fidelity: Real-valued fidelity in [0, 1]
         """
-        # Simplified fidelity: F ≈ Tr(ρσ) + Tr(√ρσρσ)
-        # For pure states, F = |⟨ψ|φ⟩|² = Tr(ρσ) exactly
+        # Simplified fidelity: F ≈ Tr(ρσ)² as approximation
+        # For pure states, F = |⟨ψ|φ⟩|² = |Tr(ρσ)|² exactly
         # For mixed states, this is an approximation but avoids eigh
 
-        # Method: Use Tr(ρσ)² as approximation
-        # This works well for pure/nearly-pure states in gate optimization
         trace_prod = torch.trace(rho @ sigma)
 
-        # For pure states: |Tr(ρσ)|² = F
-        # Take real part and square
-        fidelity = (trace_prod.real ** 2 + trace_prod.imag ** 2)
+        # CRITICAL FIX: Use torch.abs() which maintains gradients!
+        # torch.abs() for complex tensors computes |z|² = real² + imag²
+        # and properly backpropagates through both components
+        fidelity = torch.abs(trace_prod) ** 2
 
         # Clamp to valid range [0, 1]
         fidelity = torch.clamp(fidelity, 0.0, 1.0)
