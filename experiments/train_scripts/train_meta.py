@@ -109,9 +109,13 @@ def data_generator(
     }
 
 
-def create_loss_function(env, device):
+def create_loss_function(env, device, config):
     #Make a loss function .
     """Create loss function using QuantumEnvironment."""
+
+    # GPU-optimized settings from config
+    dt = config.get('dt_training', 0.01)  # Default to 0.01 if not specified
+    use_rk4 = config.get('use_rk4_training', True)  # Default to RK4 if not specified
 
     def loss_fn(policy: torch.nn.Module, data: dict):
         ## define a loss function
@@ -127,8 +131,14 @@ def create_loss_function(env, device):
         """
         task_params = data['task_params']
 
-        # compute differentiable loss
-        loss = env.compute_loss_differentiable(policy, task_params, device)
+        # compute differentiable loss with GPU-optimized settings
+        loss = env.compute_loss_differentiable(
+            policy,
+            task_params,
+            device,
+            use_rk4=use_rk4,
+            dt=dt
+        )
 
         return loss
 
@@ -219,8 +229,13 @@ def main(config_path: str):
     print(f"  Meta lr: {maml.meta_lr}")
     print(f"  Second-order: {not maml.first_order}")
     
-    # Create loss function (FIXED!)
-    loss_fn = create_loss_function(env, device)
+    # Create loss function with GPU-optimized settings
+    loss_fn = create_loss_function(env, device, config)
+
+    # Print integration settings
+    print(f"\nIntegration settings:")
+    print(f"  dt: {config.get('dt_training', 0.01)}")
+    print(f"  method: {'RK4' if config.get('use_rk4_training', True) else 'Euler'}")
     
     # Modified data generator to work with environment
     def data_generator_env(task_params, n_trajectories, split):

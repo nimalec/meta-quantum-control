@@ -63,6 +63,9 @@ class QuantumEnvironment:
         # Cache for simulators (keyed by task hash)
         self._sim_cache = {}
 
+        # Cache for differentiable PyTorch simulators (keyed by task hash)
+        self._torch_sim_cache = {}
+
         # Initial state (|0⟩ for single qubit, |00⟩ for two qubit)
         self.rho0 = np.zeros((self.d, self.d), dtype=complex)
         self.rho0[0, 0] = 1.0
@@ -123,30 +126,78 @@ class QuantumEnvironment:
         return self._L_cache[key]
     
     def get_simulator(self, task_params: NoiseParameters) -> LindbladSimulator:
-        """ Good. 
+        """ Good.
         Get simulator for task with caching.
-        
+
         Args:
             task_params: Task noise parameters
-            
+
         Returns:
             sim: LindbladSimulator instance
         """
         key = self._task_hash(task_params)
-        
+
         if key not in self._sim_cache:
             L_ops = self.get_lindblad_operators(task_params)
-            
+
             sim = LindbladSimulator(
                 H0=self.H0,
                 H_controls=self.H_controls,
                 L_operators=L_ops,
                 method=self.method
             )
-            
+
             self._sim_cache[key] = sim
-        
+
         return self._sim_cache[key]
+
+    def get_torch_simulator(
+        self,
+        task_params: NoiseParameters,
+        device: torch.device,
+        dt: float = 0.01,
+        use_rk4: bool = True
+    ) -> DifferentiableLindbladSimulator:
+        """
+        Get cached differentiable PyTorch simulator for task.
+
+        CRITICAL OPTIMIZATION: Caches simulators to avoid recreating them
+        for every loss call, which was the main performance bottleneck.
+
+        Args:
+            task_params: Task noise parameters
+            device: torch device
+            dt: Integration time step
+            use_rk4: If True, use RK4 integration
+
+        Returns:
+            sim: Cached DifferentiableLindbladSimulator instance
+        """
+        # Cache key includes device and integration settings
+        key = (self._task_hash(task_params), str(device), dt, use_rk4)
+
+        if key not in self._torch_sim_cache:
+            # Get Lindblad operators
+            L_ops_numpy = self.psd_to_lindblad.get_lindblad_operators(task_params)
+
+            # Convert system to PyTorch tensors
+            H0_torch = numpy_to_torch_complex(self.H0, device)
+            H_controls_torch = [numpy_to_torch_complex(H, device) for H in self.H_controls]
+            L_ops_torch = [numpy_to_torch_complex(L, device) for L in L_ops_numpy]
+
+            # Create differentiable simulator
+            sim = DifferentiableLindbladSimulator(
+                H0=H0_torch,
+                H_controls=H_controls_torch,
+                L_operators=L_ops_torch,
+                dt=dt,
+                method='rk4' if use_rk4 else 'euler',
+                device=device
+            )
+
+            self._torch_sim_cache[key] = sim
+
+        return self._torch_sim_cache[key]
     
     def evaluate_controls(
         self,
@@ -341,7 +392,8 @@ class QuantumEnvironment:
         policy: torch.nn.Module,
         task_params: NoiseParameters,
         device: torch.device = torch.device('cpu'),
-        use_rk4: bool = True
+        use_rk4: bool = True,
+        dt: float = 0.01
     ) -> torch.Tensor:
         """ Good: OK... this is the differentiable version that propogates gradients.
         Compute loss (infidelity) with FULL gradient support through quantum simulation.
@@ -349,11 +401,15 @@ class QuantumEnvironment:
         This is the NEW differentiable version that allows gradients to flow through
         the entire quantum dynamics. Use this for proper meta-learning!
 
+        PERFORMANCE OPTIMIZED: Now uses cached simulators to avoid recreating them
+        on every call. This is crucial for GPU performance!
+
         Args:
             policy: Policy network
             task_params: Task parameters
             device: torch device
             use_rk4: If True, use RK4 integration (more accurate but slower)
+            dt: Integration time step (larger = faster but less accurate)
 
         Returns:
             loss: FULLY DIFFERENTIABLE loss tensor with gradients!
@@ -368,24 +424,8 @@ class QuantumEnvironment:
         # Generate controls (this is differentiable)
         controls = policy(task_features)  # (n_segments, n_controls)
 
-        # Get Lindblad operators for this task
-        L_ops_numpy = self.psd_to_lindblad.get_lindblad_operators(task_params)
-
-        # Convert system to PyTorch tensors
-        H0_torch = numpy_to_torch_complex(self.H0, device)
-        H_controls_torch = [numpy_to_torch_complex(H, device) for H in self.H_controls]
-        L_ops_torch = [numpy_to_torch_complex(L, device) for L in L_ops_numpy]
-
-        # Create differentiable simulator
-        # FIXED: Use smaller time step for better numerical stability
-        sim = DifferentiableLindbladSimulator(
-            H0=H0_torch,
-            H_controls=H_controls_torch,
-            L_operators=L_ops_torch,
-            dt=0.001,  # FIXED: Reduced to 0.001 for much better stability and accuracy
-            method='rk4' if use_rk4 else 'euler',
-            device=device
-        )
+        # CRITICAL OPTIMIZATION: Get cached simulator instead of creating new one!
+        sim = self.get_torch_simulator(task_params, device, dt=dt, use_rk4=use_rk4)
 
         # Initial state |0⟩
         rho0 = torch.zeros((self.d, self.d), dtype=torch.complex64, device=device)
@@ -449,14 +489,16 @@ class QuantumEnvironment:
         """Clear all caches."""
         self._L_cache.clear()
         self._sim_cache.clear()
-    
+        self._torch_sim_cache.clear()
+
     def get_cache_stats(self) -> Dict:
         """Get cache statistics."""
         return {
             'n_cached_operators': len(self._L_cache),
             'n_cached_simulators': len(self._sim_cache),
+            'n_cached_torch_simulators': len(self._torch_sim_cache),
             'cache_size_mb': (
-                len(str(self._L_cache)) + len(str(self._sim_cache))
+                len(str(self._L_cache)) + len(str(self._sim_cache)) + len(str(self._torch_sim_cache))
             ) / 1e6
         }
 
