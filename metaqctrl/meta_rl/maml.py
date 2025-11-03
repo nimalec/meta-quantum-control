@@ -514,14 +514,18 @@ class MAMLTrainer:
         self.iteration = 0
         self.best_val_loss = float('inf')
 
-        # Training history tracking
+        # Training history tracking (for figure generation)
         self.training_history = {
-            'meta_loss': [],           # Tracked every iteration
-            'iteration': [],           # Tracked every iteration
-            'val_fidelity': [],        # Tracked at val_interval
-            'val_error': [],           # Tracked at val_interval
-            'val_iteration': [],       # Tracks which iterations have validation
-            'val_fidelity_std': []     # Track uncertainty
+            'iterations': [],          # Iteration numbers
+            'meta_loss': [],           # Meta-loss (query loss)
+            'support_loss': [],        # Support loss (pre-adaptation)
+            'query_loss': [],          # Query loss (post-adaptation)
+            'val_fidelity': [],        # Validation fidelity
+            'val_error': [],           # Validation error
+            'val_iteration': [],       # Iterations where validation occurred
+            'val_fidelity_std': [],    # Validation fidelity std
+            'grad_norms': [],          # Gradient norms
+            'nan_count': []            # NaN/Inf incidents
         }
     
     def generate_task_batch(self, n_tasks: int, split: str = 'train') -> List[Dict]:
@@ -589,9 +593,16 @@ class MAMLTrainer:
             # Meta-training step
             train_metrics = self.maml.meta_train_step(task_batch, self.loss_fn)
 
-            # Track training metrics
+            # Track training metrics for figure generation
+            self.training_history['iterations'].append(iteration)
             self.training_history['meta_loss'].append(train_metrics['meta_loss'])
-            self.training_history['iteration'].append(iteration)
+            self.training_history['query_loss'].append(train_metrics['meta_loss'])  # Same as meta_loss
+            self.training_history['support_loss'].append(train_metrics.get('mean_task_loss', train_metrics['meta_loss']))
+            self.training_history['grad_norms'].append(train_metrics.get('grad_norm', 0.0))
+
+            # Track NaN incidents
+            has_nan = train_metrics.get('error') == 'invalid_loss' or train_metrics.get('error') == 'no_valid_tasks'
+            self.training_history['nan_count'].append(1 if has_nan else 0)
 
             # Logging
             if iteration % self.log_interval == 0:

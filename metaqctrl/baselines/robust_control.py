@@ -229,7 +229,7 @@ class RobustPolicy:
 
 class RobustTrainer:
     """High-level trainer for robust policies."""
-    
+
     def __init__(
         self,
         robust_policy: RobustPolicy,
@@ -245,6 +245,17 @@ class RobustTrainer:
         self.loss_fn = loss_fn
         self.n_samples_per_task = n_samples_per_task
         self.log_interval = log_interval
+
+        # Training history for figure generation
+        self.training_history = {
+            'iterations': [],
+            'loss': [],
+            'mean_task_loss': [],
+            'max_task_loss': [],
+            'val_loss': [],
+            'val_iteration': [],
+            'val_loss_std': []
+        }
     
     def train(
         self,
@@ -288,7 +299,13 @@ class RobustTrainer:
             
             # Training step
             metrics = self.robust_policy.train_step(task_batch, self.loss_fn)
-            
+
+            # Track training history
+            self.training_history['iterations'].append(iteration)
+            self.training_history['loss'].append(metrics['loss'])
+            self.training_history['mean_task_loss'].append(metrics.get('mean_task_loss', metrics['loss']))
+            self.training_history['max_task_loss'].append(metrics.get('max_task_loss', metrics['loss']))
+
             # Logging
             if iteration % self.log_interval == 0:
                 print(f"Iter {iteration}/{n_iterations} | "
@@ -311,23 +328,43 @@ class RobustTrainer:
                     })
                 
                 val_metrics = self.robust_policy.evaluate(val_task_batch, self.loss_fn)
-                
+
+                # Track validation history
+                self.training_history['val_iteration'].append(iteration)
+                self.training_history['val_loss'].append(val_metrics['test_loss_mean'])
+                self.training_history['val_loss_std'].append(val_metrics['test_loss_std'])
+
                 print(f"\n[Validation] Iter {iteration}")
                 print(f"  Mean loss: {val_metrics['test_loss_mean']:.4f} ± "
                       f"{val_metrics['test_loss_std']:.4f}")
                 print(f"  Max loss:  {val_metrics['test_loss_max']:.4f}\n")
-                
+
                 # Save best
                 if save_path and val_metrics['test_loss_mean'] < best_val_loss:
                     best_val_loss = val_metrics['test_loss_mean']
                     best_path = save_path.replace('.pt', '_best.pt')
                     self.robust_policy.save(best_path)
-        
+
         # Save final
         if save_path:
             self.robust_policy.save(save_path)
-        
+            # Save training history
+            self.save_training_history(save_path)
+
         print("\nRobust training complete!")
+
+    def save_training_history(self, checkpoint_path: str):
+        """Save training history to JSON file."""
+        import json
+        from pathlib import Path
+
+        # Create history file path based on checkpoint path
+        history_path = Path(checkpoint_path).parent / "robust_training_history.json"
+
+        with open(history_path, 'w') as f:
+            json.dump(self.training_history, f, indent=2)
+
+        print(f"Training history saved to: {history_path}")
 
 
 class H2RobustControl:

@@ -13,16 +13,9 @@ import argparse
 
 from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.baselines.robust_control import RobustPolicy, RobustTrainer
-
-# Import system creation from train_meta
-from train_meta import (
-    create_quantum_system, 
-    create_task_distribution,
-    task_sampler,
-    data_generator,
-    create_loss_function
-)
+from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters
 from metaqctrl.quantum.gates import TargetGates
+from metaqctrl.theory.quantum_environment import create_quantum_environment
 
 
 def main(config_path: str):
@@ -47,18 +40,21 @@ def main(config_path: str):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}\n")
     
-    # Create quantum system
-    print("Setting up quantum system...")
-    quantum_system = create_quantum_system(config)
-
     # Create task distribution
     print("Creating task distribution...")
-    task_dist = create_task_distribution(config)
+    task_dist = TaskDistribution(
+        dist_type=config.get('task_dist_type', 'uniform'),
+        ranges={
+            'alpha': tuple(config.get('alpha_range', [0.5, 2.0])),
+            'A': tuple(config.get('A_range', [0.001, 0.01])),
+            'omega_c': tuple(config.get('omega_c_range', [100, 1000]))
+        }
+    )
     variance = task_dist.compute_variance()
     print(f"  Task variance σ²_θ = {variance:.4f}\n")
 
     # Target gate
-    target_gate_name = config.get('target_gate', 'hadamard')
+    target_gate_name = config.get('target_gate', 'pauli_x')
     if target_gate_name == 'hadamard':
         U_target = TargetGates.hadamard()
     elif target_gate_name == 'pauli_x':
@@ -71,15 +67,8 @@ def main(config_path: str):
     print(f"Target gate: {target_gate_name}")
 
     # Create quantum environment
-    from metaqctrl.theory.quantum_environment import QuantumEnvironment
-    env = QuantumEnvironment(
-        H0=quantum_system['H0'],
-        H_controls=quantum_system['H_controls'],
-        psd_to_lindblad=quantum_system['psd_to_lindblad'],
-        target_state=target_state,
-        T=config.get('horizon', 1.0),
-        method=config.get('integration_method', 'RK45')
-    )
+    print("\nSetting up quantum environment...")
+    env = create_quantum_environment(config, target_state)
     
     # Create policy
     print("\nCreating policy network...")
@@ -106,18 +95,47 @@ def main(config_path: str):
     )
     print(f"  Robust type: {robust_type}")
     
-    # Create loss function
-    loss_fn = create_loss_function(env, device)
-    
+    # Loss function with GPU-optimized settings
+    dt = config.get('dt_training', 0.01)
+    use_rk4 = config.get('use_rk4_training', True)
+
+    def loss_fn(policy_net, data):
+        task_params = data['task_params']
+        return env.compute_loss_differentiable(
+            policy_net, task_params, device, use_rk4=use_rk4, dt=dt
+        )
+
+    # Task sampler
+    def task_sampler(n, split):
+        if split == 'train':
+            seed_offset = 0
+        elif split == 'val':
+            seed_offset = 100000
+        else:
+            seed_offset = 200000
+        local_rng = np.random.default_rng(rng.integers(0, 1000000) + seed_offset)
+        return task_dist.sample(n, local_rng)
+
+    # Data generator
+    def data_generator(task_params, n_trajectories, split):
+        task_features = torch.tensor(
+            task_params.to_array(),
+            dtype=torch.float32,
+            device=device
+        )
+        task_features_batch = task_features.unsqueeze(0).repeat(n_trajectories, 1)
+        return {
+            'task_features': task_features_batch,
+            'task_params': task_params
+        }
+
     # Create trainer
     print("\nSetting up trainer...")
     n_samples = config.get('n_support', 10) + config.get('n_query', 10)
     trainer = RobustTrainer(
         robust_policy=robust_policy,
-        task_sampler=lambda n, split: task_sampler(n, split, task_dist, rng),
-        data_generator=lambda tp, n, split: data_generator(
-            tp, n, split, quantum_system, config, device
-        ),
+        task_sampler=task_sampler,
+        data_generator=data_generator,
         loss_fn=loss_fn,
         n_samples_per_task=n_samples,
         log_interval=config.get('log_interval', 10)
