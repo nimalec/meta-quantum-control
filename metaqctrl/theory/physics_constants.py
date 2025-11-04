@@ -393,7 +393,7 @@ def _compute_control_relevant_variance_simple(
     Returns:
         sigma2_S: Variance
     """
-    from metaqctrl.quantum.noise_models import NoisePSDModel
+    from metaqctrl.quantum.noise_adapter import NoisePSDModel
 
     psd_model = NoisePSDModel(model_type='one_over_f')
 

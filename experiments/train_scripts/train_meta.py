@@ -12,8 +12,9 @@ from datetime import datetime
 import argparse
 
 from metaqctrl.quantum.lindblad import LindbladSimulator
-from metaqctrl.quantum.noise_models import (
-    TaskDistribution, NoisePSDModel, PSDToLindblad, NoiseParameters
+from metaqctrl.quantum.noise_adapter import (
+    TaskDistribution, NoisePSDModel, PSDToLindblad, NoiseParameters,
+    estimate_qubit_frequency_from_hamiltonian, get_coupling_for_noise_type
 )
 from metaqctrl.quantum.gates import GateFidelityComputer, TargetGates
 from metaqctrl.meta_rl.policy import PulsePolicy
@@ -28,22 +29,46 @@ def create_quantum_system(config: dict):
     sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
     sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
     
-    # System Hamiltonians ==> initialize Hamiltonian 
-    H0 = 0.0 * sigma_z  # Drift (can be non-zero)
+    # System Hamiltonians ==> initialize Hamiltonian
+    drift_strength = config.get('drift_strength', 0.1)
+    H0 = drift_strength * sigma_z  # Drift (small non-zero for better dynamics)
     H_controls = [sigma_x, sigma_y]  # Control Hamiltonians
-    
-    # PSD model ==> define a PSD noise model 
+
+    # PSD model ==> define a PSD noise model
     psd_model = NoisePSDModel(model_type=config.get('psd_model', 'one_over_f'))
-    
-    # Sampling frequencies ==> define 3 sample frequencies 
-    #omega_sample = np.array([1.0, 5.0, 10.0])
-    omega_sample = np.linspace(1,1e5,1000)
-    
-    # PSD to Lindblad converter
+
+    # Sampling frequencies ==> define sample frequencies across control bandwidth
+    omega_sample = np.linspace(1, 1e5, 1000)
+
+    # Physics parameters for v2 (with sensible defaults)
+    T = config.get('horizon', 1.0)  # Gate time
+
+    # Estimate qubit frequency from Hamiltonian
+    omega0 = config.get('omega0', None)
+    if omega0 is None:
+        omega0 = estimate_qubit_frequency_from_hamiltonian(H0)
+
+    # Get coupling for noise type
+    noise_type = config.get('noise_type', 'frequency')
+    g_energy_per_xi = config.get('g_energy_per_xi', None)
+    if g_energy_per_xi is None:
+        g_energy_per_xi = get_coupling_for_noise_type(noise_type)
+
+    sequence = config.get('sequence', 'ramsey')
+    temperature_K = config.get('temperature_K', None)
+    Gamma_h = config.get('Gamma_h', 0.0)
+
+    # PSD to Lindblad converter (uses v2 physics via adapter)
     psd_to_lindblad = PSDToLindblad(
         basis_operators=[sigma_x, sigma_y, sigma_z],
         sampling_freqs=omega_sample,
-        psd_model=psd_model
+        psd_model=psd_model,
+        T=T,
+        sequence=sequence,
+        omega0=omega0,
+        g_energy_per_xi=g_energy_per_xi,
+        temperature_K=temperature_K,
+        Gamma_h=Gamma_h
     )
     
     return {

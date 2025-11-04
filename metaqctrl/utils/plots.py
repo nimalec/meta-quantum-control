@@ -11,13 +11,14 @@ from typing import Optional, List
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from metaqctrl.quantum.noise_models import (
+from metaqctrl.quantum.noise_adapter import (
     NoisePSDModel,
     TaskDistribution,
-    psd_distance,
     NoiseParameters,
     PSDToLindblad
 )
+# psd_distance is in noise_models_v2, import if needed
+from metaqctrl.quantum.noise_models_v2 import psd_distance
 
 # Initialize Typer app
 app = typer.Typer(help="Generate publication-quality figures for meta-quantum-control")

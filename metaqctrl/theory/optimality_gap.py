@@ -428,7 +428,7 @@ def plot_gap_vs_control_relevant_variance(
         save_path: Path to save plot
     """
     import matplotlib.pyplot as plt
-    from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters
+    from metaqctrl.quantum.noise_adapter import TaskDistribution, NoiseParameters
     from metaqctrl.theory.physics_constants import compute_control_relevant_variance
 
     if base_mean is None:
@@ -557,7 +557,7 @@ def plot_gap_vs_variance(
         save_path: Path to save plot
     """
     import matplotlib.pyplot as plt
-    from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters
+    from metaqctrl.quantum.noise_adapter import TaskDistribution, NoiseParameters
 
     if base_mean is None:
         base_mean = np.array([1.0, 0.1, 5.0])  # (alpha, A, omega_c)

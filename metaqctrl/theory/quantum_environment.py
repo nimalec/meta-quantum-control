@@ -11,8 +11,8 @@ from typing import Dict, Tuple, Optional
 from functools import lru_cache
 from metaqctrl.quantum.lindblad import LindbladSimulator
 from metaqctrl.quantum.lindblad_torch import DifferentiableLindbladSimulator, numpy_to_torch_complex
-from metaqctrl.quantum.noise_models import NoiseParameters
-#from metaqctrl.quantum.noise_models_v2 import NoiseParameters
+# Use adapter for backward-compatible v2 physics
+from metaqctrl.quantum.noise_adapter import NoiseParameters
 from metaqctrl.quantum.gates import state_fidelity
 
 
@@ -121,12 +121,12 @@ class QuantumEnvironment:
             L_ops: List of Lindblad operators
         """
         key = self._task_hash(task_params)
-        
+
         if key not in self._L_cache:
-           # L_ops = self.psd_to_lindblad.get_lindblad_operators(task_params)
-            L_ops = self.psd_to_lindblad.qubit_lindblad_ops(task_params,self.T,self.sequence,self.omega0)
+            # Use adapter's backward-compatible API (handles v2 physics internally)
+            L_ops = self.psd_to_lindblad.get_lindblad_operators(task_params)
             self._L_cache[key] = L_ops
-        
+
         return self._L_cache[key]
     
     def get_simulator(self, task_params: NoiseParameters) -> LindbladSimulator:
@@ -615,7 +615,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
     Returns:
         env: QuantumEnvironment instance
     """
-    from metaqctrl.quantum.noise_models_v2 import NoisePSDModel, PSDToLindblad
+    from metaqctrl.quantum.noise_adapter import NoisePSDModel, PSDToLindblad, estimate_qubit_frequency_from_hamiltonian, get_coupling_for_noise_type
 
     # Get number of qubits from config
     num_qubits = config.get('num_qubits', 1)
@@ -674,25 +674,39 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
     omega_max = n_segments / T
     omega_sample = np.linspace(0, omega_max, 10)
 
-    # PSD to Lindblad converter
+    # Physics parameters for v2 (with sensible defaults)
+    # Estimate qubit frequency from Hamiltonian if not provided
+    omega0 = config.get('omega0', None)
+    if omega0 is None:
+        omega0 = estimate_qubit_frequency_from_hamiltonian(H0)
+
+    # Get coupling constant for noise type
+    noise_type = config.get('noise_type', 'frequency')  # 'frequency', 'magnetic', 'charge', 'amplitude'
+    g_energy_per_xi = config.get('g_energy_per_xi', None)
+    if g_energy_per_xi is None:
+        g_energy_per_xi = get_coupling_for_noise_type(noise_type)
+
+    # Pulse sequence for dephasing filter function
+    sequence = config.get('sequence', 'ramsey')  # 'ramsey', 'echo', 'cpmg_n'
+
+    # Temperature (None = classical noise, Γ↑=Γ↓)
+    temperature_K = config.get('temperature_K', None)
+
+    # Homogeneous broadening (rad/s)
+    Gamma_h = config.get('Gamma_h', 0.0)
+
+    # PSD to Lindblad converter (uses v2 physics via adapter)
     psd_to_lindblad = PSDToLindblad(
         basis_operators=basis_operators,
         sampling_freqs=omega_sample,
-        psd_model=psd_model
+        psd_model=psd_model,
+        T=T,
+        sequence=sequence,
+        omega0=omega0,
+        g_energy_per_xi=g_energy_per_xi,
+        temperature_K=temperature_K,
+        Gamma_h=Gamma_h
     )
-
-
-    # PSD model
-    psd_model = NoisePSDModel(model_type=config.get('psd_model', 'one_over_f'))
-    
-    # Coupling scale so (g^2 S)/ħ^2 has units 1/s.
-    # Example: frequency noise δω with H_int = (ħ/2) δω σ_z  ⇒ g = ħ/2
-    # HBAR = 1.054_571_817e-34
-    # g_energy_per_xi = config.get('g_energy_per_xi', HBAR/2)
-    # T = config.get("horizon", 50e-6)
-    
-    # # PSD→Lindblad converter (physics-correct)
-    # psd_to_lindblad = PSDToLindblad(psd_model=psd_model, g_energy_per_xi=g_energy_per_xi)
 
 
     # Create environment
@@ -703,22 +717,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
         target_state=target_state,
         T=T,
         method=config.get('integration_method', 'RK45'),
-        target_unitary=target_unitary  # FIXED: Pass target unitary for process fidelity
+        target_unitary=target_unitary
     )
-    # wire noise context
-    # env.sequence = config.get('sequence', 'ramsey')       # 'ramsey' | 'echo' | 'cpmg_n'
-    # env.temperature_K = config.get('temperature_K', None) # None => Γ↑=Γ↓
-    # env.Gamma_h = config.get('Gamma_h', 0.0)              # homogeneous linewidth (rad/s)
-    
-    # # Bohr frequency (rad/s): prefer explicit config; otherwise infer from H0 gap
-    # env.omega0 = config.get('omega0', None)
-    # if env.omega0 is None:
-    #     evals = np.linalg.eigvalsh(H0)
-    #     evals = np.sort(np.real(evals))
-    #     if len(evals) >= 2:
-    #         env.omega0 = float(abs(evals[-1] - evals[0]))  # crude 2-level gap in angular units
-    #     else:
-    #         # fallback default (5 MHz)
-    #         env.omega0 = 2*np.pi*5e6
 
     return env

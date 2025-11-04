@@ -12,7 +12,7 @@ vectorization capabilities.
 import torch
 import numpy as np
 from typing import List, Tuple
-from metaqctrl.quantum.noise_models import NoiseParameters
+from metaqctrl.quantum.noise_adapter import NoiseParameters
 from metaqctrl.theory.quantum_environment import QuantumEnvironment
 
 
