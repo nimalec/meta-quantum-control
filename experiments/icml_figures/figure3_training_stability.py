@@ -1,16 +1,3 @@
-"""
-Figure 3 — Training Stability, Generalization During Training, and Reproducibility
-
-This script generates all panels for Figure 3:
-  (a) Meta-loss vs outer iterations
-  (b) Support vs Query loss curves
-  (c) Validation on held-out tasks during training
-  (d) Stability diagnostics (gradient norms, NaN incidents)
-
-NOTE: This requires logging data during training. You'll need to modify
-train_meta.py to save this data, or re-run training with logging enabled.
-"""
-
 import os
 import sys
 import numpy as np
@@ -207,9 +194,7 @@ def generate_figure3(
     if log_path is None:
         # Try default locations
         possible_paths = [
-            "checkpoints/training_log.json",
-            "results/training_log.json",
-            "../checkpoints/training_log.json"
+            "../train_scripts/checkpoints/training_history.json"
         ]
         for p in possible_paths:
             if os.path.exists(p):
@@ -261,55 +246,6 @@ def generate_figure3(
     print("  3. Re-generate this figure with real data")
 
 
-def create_logging_snippet():
-    """
-    Print code snippet to add to train_meta.py for logging
-    """
-    snippet = '''
-# Add this to train_meta.py (in MAMLTrainer class or main loop):
-
-import json
-from pathlib import Path
-
-# Initialize logging
-training_log = {
-    'iterations': [],
-    'meta_loss': [],
-    'support_loss': [],
-    'query_loss': [],
-    'val_fidelity': [],
-    'grad_norms': [],
-    'nan_count': []
-}
-
-# In training loop, after each iteration:
-training_log['iterations'].append(iteration)
-training_log['meta_loss'].append(float(query_loss))
-training_log['support_loss'].append(float(support_loss))
-training_log['query_loss'].append(float(query_loss))
-
-# Validation (every N iterations):
-if iteration % val_interval == 0:
-    val_fid = evaluate_on_validation_tasks(...)
-    training_log['val_fidelity'].append(float(val_fid))
-
-# Gradient norms
-grad_norm = sum(p.grad.norm().item() for p in model.parameters() if p.grad is not None)
-training_log['grad_norms'].append(grad_norm)
-
-# NaN detection
-has_nan = any(torch.isnan(p.grad).any() for p in model.parameters() if p.grad is not None)
-training_log['nan_count'].append(int(has_nan))
-
-# Save periodically
-if iteration % 100 == 0:
-    log_path = Path("checkpoints") / "training_log.json"
-    with open(log_path, 'w') as f:
-        json.dump(training_log, f, indent=2)
-'''
-    return snippet
-
-
 if __name__ == "__main__":
     import argparse
 
@@ -327,7 +263,6 @@ if __name__ == "__main__":
         print("=" * 80)
         print("CODE SNIPPET: Add to train_meta.py for logging")
         print("=" * 80)
-        print(create_logging_snippet())
         print("=" * 80)
 
     generate_figure3(

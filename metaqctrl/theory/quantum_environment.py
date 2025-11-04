@@ -12,6 +12,7 @@ from functools import lru_cache
 from metaqctrl.quantum.lindblad import LindbladSimulator
 from metaqctrl.quantum.lindblad_torch import DifferentiableLindbladSimulator, numpy_to_torch_complex
 from metaqctrl.quantum.noise_models import NoiseParameters
+#from metaqctrl.quantum.noise_models_v2 import NoiseParameters
 from metaqctrl.quantum.gates import state_fidelity
 
 
@@ -52,6 +53,8 @@ class QuantumEnvironment:
         self.target_unitary = target_unitary  # Store for process fidelity
         self.T = T
         self.method = method
+        self.sequence = None  
+        self.omega0 = None 
 
         # System dimensions
         self.d = H0.shape[0]
@@ -120,7 +123,8 @@ class QuantumEnvironment:
         key = self._task_hash(task_params)
         
         if key not in self._L_cache:
-            L_ops = self.psd_to_lindblad.get_lindblad_operators(task_params)
+           # L_ops = self.psd_to_lindblad.get_lindblad_operators(task_params)
+            L_ops = self.psd_to_lindblad.qubit_lindblad_ops(task_params,self.T,self.sequence,self.omega0)
             self._L_cache[key] = L_ops
         
         return self._L_cache[key]
@@ -569,7 +573,7 @@ def get_target_state_from_config(config: dict) -> Tuple[np.ndarray, np.ndarray]:
     """
     from metaqctrl.quantum.gates import TargetGates
 
-    target_gate_name = config.get('target_gate', 'hadamard')
+    target_gate_name = config.get('target_gate', 'pauli_x')
     num_qubits = config.get('num_qubits', 1)
 
     # Get target unitary
@@ -611,7 +615,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
     Returns:
         env: QuantumEnvironment instance
     """
-    from metaqctrl.quantum.noise_models import NoisePSDModel, PSDToLindblad
+    from metaqctrl.quantum.noise_models_v2 import NoisePSDModel, PSDToLindblad
 
     # Get number of qubits from config
     num_qubits = config.get('num_qubits', 1)
@@ -677,6 +681,20 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
         psd_model=psd_model
     )
 
+
+    # PSD model
+    psd_model = NoisePSDModel(model_type=config.get('psd_model', 'one_over_f'))
+    
+    # Coupling scale so (g^2 S)/ħ^2 has units 1/s.
+    # Example: frequency noise δω with H_int = (ħ/2) δω σ_z  ⇒ g = ħ/2
+    # HBAR = 1.054_571_817e-34
+    # g_energy_per_xi = config.get('g_energy_per_xi', HBAR/2)
+    # T = config.get("horizon", 50e-6)
+    
+    # # PSD→Lindblad converter (physics-correct)
+    # psd_to_lindblad = PSDToLindblad(psd_model=psd_model, g_energy_per_xi=g_energy_per_xi)
+
+
     # Create environment
     env = QuantumEnvironment(
         H0=H0,
@@ -687,5 +705,20 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
         method=config.get('integration_method', 'RK45'),
         target_unitary=target_unitary  # FIXED: Pass target unitary for process fidelity
     )
+    # wire noise context
+    # env.sequence = config.get('sequence', 'ramsey')       # 'ramsey' | 'echo' | 'cpmg_n'
+    # env.temperature_K = config.get('temperature_K', None) # None => Γ↑=Γ↓
+    # env.Gamma_h = config.get('Gamma_h', 0.0)              # homogeneous linewidth (rad/s)
+    
+    # # Bohr frequency (rad/s): prefer explicit config; otherwise infer from H0 gap
+    # env.omega0 = config.get('omega0', None)
+    # if env.omega0 is None:
+    #     evals = np.linalg.eigvalsh(H0)
+    #     evals = np.sort(np.real(evals))
+    #     if len(evals) >= 2:
+    #         env.omega0 = float(abs(evals[-1] - evals[0]))  # crude 2-level gap in angular units
+    #     else:
+    #         # fallback default (5 MHz)
+    #         env.omega0 = 2*np.pi*5e6
 
     return env

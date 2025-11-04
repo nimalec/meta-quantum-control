@@ -277,13 +277,16 @@ if __name__ == "__main__":
     sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
     sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
     sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
+    sig_p = 0.5*(sigma_x-1j*sigma_y)
     
     H0 = 0.5 * sigma_z  # Drift
     H_controls = [sigma_x, sigma_y]  # Control Hamiltonians
     
     # Example Lindblad operator (dephasing)
-    gamma = 0.1
-    L_ops = [np.sqrt(gamma) * sigma_z]
+    gamma_1 = 0.001 
+    gamma_2 = 0.1 
+   # L_ops = [np.sqrt(gamma) * sigma_z]
+    L_ops = [np.sqrt(gamma_1) * sig_p, np.sqrt(gamma_2) * sigma_z ]
     
     sim = LindbladSimulator(H0, H_controls, L_ops, method='RK45')
     
@@ -292,7 +295,8 @@ if __name__ == "__main__":
     
     # Random control sequence
     n_segments = 20
-    controls = np.random.randn(n_segments, 2) * 0.5
+   # controls = np.random.randn(n_segments, 2) * 0.5
+    controls = np.ones((n_segments, 2)) * 0.5
     
     rho_final, traj = sim.evolve(rho0, controls, T=1.0)
     

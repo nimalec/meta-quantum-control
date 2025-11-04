@@ -343,8 +343,9 @@ class PSDToLindblad:
             else:
                 gamma_j = 0.0
 
-            bandwidth = omega_max - omega_min
+            bandwidth = omega_max - omega_min 
             gamma_j_normalized = gamma_j / bandwidth if bandwidth > 0 else gamma_j
+            gamma_j_normalized  = gamma_j
             rates.append(max(gamma_j_normalized, 0.0))
 
         return np.array(rates)
