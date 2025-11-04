@@ -18,9 +18,8 @@ import json
 from typing import Dict, List, Tuple
 from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score
-
-# Add src to path
-#sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+from typer import Typer
+from pathlib import Path
 
 from metaqctrl.quantum.lindblad import LindbladSimulator
 from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters, PSDToLindblad
@@ -32,6 +31,8 @@ from metaqctrl.theory.quantum_environment import create_quantum_environment
 from metaqctrl.theory.optimality_gap import OptimalityGapComputer, GapConstants
 from metaqctrl.theory.physics_constants import estimate_all_constants
 from metaqctrl.utils.checkpoint_utils import load_policy_from_checkpoint
+
+app = Typer()
 
 
 def exponential_model(K, gap_max, mu_eta):
@@ -335,7 +336,11 @@ def plot_gap_vs_k(results: Dict, output_path: str = "results/gap_vs_k/figure.pdf
     plt.close()
 
 
-if __name__ == "__main__":
+@app.command()
+def main(
+    meta_path: Path = Path("experiments/train_scripts/checkpoints/maml_best_pauli_x_best_policy.pt"),
+    robust_path: Path = Path("experiments/train_scripts/checkpoints/robust_minimax_20251103_184653_best_policy.pt")
+):
     # Configuration matching paper Section 5
     config = {
         'num_qubits': 1,
@@ -352,53 +357,12 @@ if __name__ == "__main__":
         'noise_frequencies': [1.0, 5.0, 10.0]
     }
 
-    # Paths to trained models (adjust as needed)
-    # Try multiple possible locations
-    script_dir = Path(__file__).parent
-    possible_meta_paths = [
-        "checkpoints/maml_best.pt",
-        "../checkpoints/maml_20251027_161519_best_policy.pt",
-        script_dir.parent / "checkpoints" / "maml_best.pt",
-        script_dir / "checkpoints" / "maml_best.pt",
-    ]
-    possible_robust_paths = [
-        "checkpoints/robust_best.pt",
-        "../checkpoints/robust_minimax_20251027_162238_best_policy.pt",
-        script_dir.parent / "checkpoints" / "robust_best.pt",
-        script_dir / "checkpoints" / "robust_best.pt",
-    ]
-
-    # Find existing paths
-    meta_path = None
-    for p in possible_meta_paths:
-        if os.path.exists(p):
-            meta_path = str(p)
-            break
-
-    robust_path = None
-    for p in possible_robust_paths:
-        if os.path.exists(p):
-            robust_path = str(p)
-            break
-
-    # Check if models exist
-    if meta_path is None:
-        print(f"ERROR: Meta-policy not found. Searched in:")
-        for p in possible_meta_paths:
-            print(f"  - {p}")
-        print("\nPlease train the meta-policy first using:")
-        print("  python experiments/train_meta.py")
-        sys.exit(1)
-
-    if robust_path is None:
-        print(f"ERROR: Robust policy not found. Searched in:")
-        for p in possible_robust_paths:
-            print(f"  - {p}")
-        print("\nPlease train the robust policy first using:")
-        print("  python experiments/train_robust.py")
-        sys.exit(1)
-
+    # Check if policy dirs exist
+    if not meta_path.exists():
+        raise RecursionError(f"Can not find: {meta_path}")
     print(f"Using meta policy: {meta_path}")
+    if not robust_path.exists():
+        raise RecursionError(f"Can not find: {robust_path}")
     print(f"Using robust policy: {robust_path}")
 
     # Run experiment
@@ -414,3 +378,6 @@ if __name__ == "__main__":
 
     # Generate figure
     plot_gap_vs_k(results)
+
+if __name__ == "__main__":
+    app()
