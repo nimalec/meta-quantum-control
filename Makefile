@@ -81,3 +81,8 @@ all-figures: \
 	results/figures/noise_double_exp.png \
 	results/figures/effective_rates.png
 
+
+results/gap_vs_k/figure.pdf:
+	uv run experiments/paper_results/experiment_gap_vs_k.py \
+		--meta-path experiments/train_scripts/checkpoints/maml_best_pauli_x_policy.pt  \
+		--robust-path experiments/train_scripts/checkpoints/robust_minimax_20251103_184653_best_policy.pt
