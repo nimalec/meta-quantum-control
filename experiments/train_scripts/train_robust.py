@@ -188,7 +188,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--config',
         type=str,
-        default='configs/experiment_config.yaml',
+        default='../../configs/experiment_config.yaml',
         help='Path to config file'
     )
     

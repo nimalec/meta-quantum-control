@@ -17,6 +17,8 @@ import json
 from typing import Dict, List, Tuple
 from scipy.optimize import curve_fit
 from sklearn.metrics import r2_score
+from typer import Typer
+from pathlib import Path
 
 from metaqctrl.quantum.lindblad import LindbladSimulator
 from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters, PSDToLindblad
@@ -28,6 +30,8 @@ from metaqctrl.theory.quantum_environment import create_quantum_environment
 from metaqctrl.theory.optimality_gap import OptimalityGapComputer, GapConstants
 from metaqctrl.theory.physics_constants import compute_control_relevant_variance
 from metaqctrl.utils.checkpoint_utils import load_policy_from_checkpoint
+
+app = Typer()
 
 
 def linear_model(sigma2_S, slope):
@@ -413,8 +417,11 @@ def plot_gap_vs_variance(results: Dict, output_path: str = "results/gap_vs_varia
 
     plt.close()
 
-
-if __name__ == "__main__":
+@app.command()
+def main(
+    meta_path: Path = Path("experiments/train_scripts/checkpoints/maml_best_pauli_x_best_policy.pt"),
+    robust_path: Path = Path("experiments/train_scripts/checkpoints/robust_minimax_20251103_184653_best_policy.pt")
+):
     # Configuration matching paper Section 5
     config = {
         'num_qubits': 1,
@@ -430,10 +437,6 @@ if __name__ == "__main__":
         'omega_c_range': [2.0, 8.0],
         'noise_frequencies': [1.0, 5.0, 10.0]
     }
-
-    # Paths to trained models
-    meta_path = "../checkpoints/maml_20251027_161519_best_policy.pt"
-    robust_path = "../checkpoints/robust_minimax_20251027_162238_best_policy.pt" 
 
     # Check if models exist
     if not os.path.exists(meta_path) or not os.path.exists(robust_path):
@@ -455,3 +458,7 @@ if __name__ == "__main__":
 
     # Generate figure
     plot_gap_vs_variance(results)
+
+
+if __name__ == "__main__":
+    app()
