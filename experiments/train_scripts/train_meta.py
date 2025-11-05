@@ -50,13 +50,13 @@ def create_quantum_system(config: dict):
 
     # Get coupling for noise type
     noise_type = config.get('noise_type', 'frequency')
-    g_energy_per_xi = config.get('g_energy_per_xi', None)
+    g_energy_per_xi =None 
     if g_energy_per_xi is None:
         g_energy_per_xi = get_coupling_for_noise_type(noise_type)
 
     sequence = config.get('sequence', 'ramsey')
-    temperature_K = config.get('temperature_K', None)
-    Gamma_h = config.get('Gamma_h', 0.0)
+    temperature_K = None 
+    Gamma_h = 0 
 
     # PSD to Lindblad converter (uses v2 physics via adapter)
     psd_to_lindblad = PSDToLindblad(
@@ -86,7 +86,7 @@ def create_task_distribution(config: dict):
         dist_type=config.get('task_dist_type', 'uniform'),
         ranges={
             'alpha': tuple(config.get('alpha_range', [0.5, 2.0])),
-            'A': tuple(config.get('A_range', [0.05, 0.3])),
+            'A': tuple(config.get('A_range', [0.001, 3])),
             'omega_c': tuple(config.get('omega_c_range', [2.0, 8.0]))
         }
     )
@@ -103,7 +103,8 @@ def task_sampler(n_tasks: int, split: str, task_dist: TaskDistribution, rng: np.
     else:  # test
         seed_offset = 200000
     
-    local_rng = np.random.default_rng(rng.integers(0, 1000000) + seed_offset)
+    #local_rng = np.random.default_rng(rng.integers(0, 1000000) + seed_offset)
+    local_rng = np.random.default_rng() 
     return task_dist.sample(n_tasks, local_rng)
 
 
@@ -183,10 +184,7 @@ def main(config_path: str):
     print(f"Config: {config_path}\n")
     
     # Set random seeds
-    seed = config.get('seed', 42)
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng()
     
     # Device --> define a GPU device 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

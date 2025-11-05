@@ -208,7 +208,6 @@ class PSDToLindblad:
         L_plus  = np.array([[0, 1], [0, 0]], dtype=complex)  # |e><g|
 
         ops = [np.sqrt(Gamma_down) * L_minus,
-               np.sqrt(Gamma_up)   * L_plus,
                np.sqrt(gamma_phi)  * L_phi]
         rates = np.array([Gamma_down, Gamma_up, gamma_phi], dtype=float)
         return ops, rates
@@ -296,7 +295,7 @@ if __name__ == "__main__":
         dist_type="uniform",
         ranges={"alpha": (0.5, 2.0), "A": (0.05, 0.3), "omega_c": (2.0, 8.0)}
     )
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng()
     tasks = task_dist.sample(5, rng)
 
     print("Sampled tasks:")
