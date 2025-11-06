@@ -103,11 +103,12 @@ class QuantumEnvironment:
         return self.evaluate_controls(controls, task_params, return_trajectory=False)
 
     def _task_hash(self, task_params: NoiseParameters) -> tuple:
-        """Create hashable key for task."""
+        """Create hashable key for task (including model type)."""
         return (
             round(task_params.alpha, 6),
             round(task_params.A, 6),
-            round(task_params.omega_c, 6)
+            round(task_params.omega_c, 6),
+            task_params.model_type  # NEW: Include model type in hash
         )
     
     def get_lindblad_operators(self, task_params: NoiseParameters) -> list:
@@ -665,8 +666,17 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
     else:
         raise ValueError(f"num_qubits={num_qubits} not supported. Use 1 or 2.")
 
-    # PSD model
-    psd_model = NoisePSDModel(model_type=config.get('psd_model', 'one_over_f'))
+    # PSD model - NEW: Support for mixed models
+    # If config specifies multiple model_types, use dynamic model selection (psd_model=None)
+    # Otherwise, create fixed model for backward compatibility
+    model_types = config.get('model_types', None)
+    if model_types is None:
+        # Single model mode (backward compatibility)
+        psd_model = NoisePSDModel(model_type=config.get('psd_model', 'one_over_f'))
+    else:
+        # Mixed model mode - use dynamic selection
+        psd_model = None
+        print(f"INFO: Mixed model mode enabled with models: {model_types}")
 
     # Sampling frequencies (control bandwidth)
     n_segments = config.get('n_segments', 20)
@@ -699,7 +709,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
     psd_to_lindblad = PSDToLindblad(
         basis_operators=basis_operators,
         sampling_freqs=omega_sample,
-        psd_model=psd_model,
+        psd_model=psd_model,  # Can be None for dynamic model selection
         T=T,
         sequence=sequence,
         omega0=omega0,

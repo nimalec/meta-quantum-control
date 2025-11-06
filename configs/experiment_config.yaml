@@ -4,7 +4,7 @@
 seed: 42
 
 # Quantum System
-psd_model: 'one_over_f'  # 'one_over_f', 'lorentzian', 'double_exp'
+psd_model: 'one_over_f'  # 'one_over_f', 'lorentzian', 'double_exp' (used if model_types not specified)
 horizon: 1.0  # Total evolution time (arbitrary units)
 target_gate: 'pauli_x'  # 'hadamard', 'pauli_x', 'pauli_y'
 
@@ -15,9 +15,13 @@ alpha_range: [0.5, 2.0]      # Spectral exponent range
 A_range: [0.001, 0.01]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
 omega_c_range: [100, 1000]    # Cutoff frequency range
 
+# NEW: Mixed Model Sampling (comment out for single model mode)
+# Uncomment to enable mixed model sampling across different PSD types
+# model_types: ['one_over_f', 'lorentzian']  # List of model types to sample
+# model_probs: [0.5, 0.5]  # Probabilities (must sum to 1.0). If omitted, uniform distribution
 
 # Policy Network
-task_feature_dim: 3
+task_feature_dim: 4  # NEW: Changed from 3 to 4 to include model_type encoding
 hidden_dim: 64
 n_hidden_layers: 1
 n_segments: 20

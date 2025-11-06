@@ -1,0 +1,78 @@
+# Meta-RL for Quantum Control - Mixed Model Experiment Configuration
+#
+# This config enables MIXED MODEL SAMPLING across different PSD noise types.
+# The policy learns to adapt to fundamentally different noise characteristics!
+#
+# Benefits:
+# - Larger task variance σ²_θ → Larger optimality gap vs robust control
+# - Better generalization to unknown noise types
+# - More realistic: real devices have mixed noise sources
+#
+# Expected performance:
+# - May require more adaptation steps (inner_steps) than single model
+# - Higher final meta-validation fidelity on diverse tasks
+# - Better transfer to held-out noise models
+
+# Random seed
+seed: 42
+
+# Quantum System
+# NOTE: psd_model is ignored when model_types is specified
+psd_model: 'one_over_f'  # Not used in mixed model mode
+horizon: 1.0  # Total evolution time (arbitrary units)
+target_gate: 'pauli_x'  # 'hadamard', 'pauli_x', 'pauli_y'
+
+# Task Distribution
+task_dist_type: 'uniform'
+
+alpha_range: [0.5, 2.0]      # Spectral exponent range
+A_range: [0.001, 0.01]       # Noise amplitude range
+omega_c_range: [100, 1000]   # Cutoff frequency range
+
+# MIXED MODEL SAMPLING - This is the key feature!
+# Policy will see tasks from BOTH 1/f and Lorentzian noise
+model_types: ['one_over_f', 'lorentzian']  # Sample from multiple PSD models
+model_probs: [0.5, 0.5]  # Equal probability (50% each). Can be adjusted.
+# Alternative: model_probs: [0.7, 0.3]  # 70% 1/f, 30% Lorentzian
+# Alternative: model_types: ['one_over_f', 'lorentzian', 'double_exp']  # Three models!
+
+# Policy Network
+task_feature_dim: 4  # REQUIRED for mixed models: [alpha, A, omega_c, model_encoding]
+hidden_dim: 64
+n_hidden_layers: 1
+n_segments: 20
+n_controls: 2
+output_scale: 2.0
+activation: 'tanh'
+
+# MAML Hyperparameters
+inner_lr: 0.02
+inner_steps: 15  # INCREASED from 10: More steps needed to adapt to diverse noise types
+meta_lr: 0.02
+first_order: true
+
+# Training
+n_iterations: 60
+tasks_per_batch: 10
+n_support: 2
+n_query: 2
+log_interval: 2
+val_interval: 2
+val_tasks: 5
+
+# Checkpointing
+save_dir: 'checkpoints_mixed_models'  # Separate directory for mixed model experiments
+
+# Robust Baseline (for comparison)
+robust_type: 'minimax'
+robust_iterations: 1000
+robust_tasks_per_batch: 16
+
+# Optimality Gap Experiments
+gap_n_samples: 100
+gap_K_values: [1, 3, 5, 10, 20]
+gap_variance_range: [0.01, 0.05, 0.1, 0.2, 0.5]
+
+# Integration settings
+dt_training: 0.01
+use_rk4_training: true

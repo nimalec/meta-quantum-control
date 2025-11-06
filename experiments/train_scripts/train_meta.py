@@ -80,15 +80,21 @@ def create_quantum_system(config: dict):
 
 
 def create_task_distribution(config: dict):
-    ## Create a distribution of tasks , generating P 
-    """Create task distribution P."""
+    ## Create a distribution of tasks , generating P
+    """Create task distribution P (with optional mixed model support)."""
+    # NEW: Support for mixed model sampling
+    model_types = config.get('model_types', None)
+    model_probs = config.get('model_probs', None)
+
     return TaskDistribution(
         dist_type=config.get('task_dist_type', 'uniform'),
         ranges={
             'alpha': tuple(config.get('alpha_range', [0.5, 2.0])),
             'A': tuple(config.get('A_range', [0.05, 0.3])),
             'omega_c': tuple(config.get('omega_c_range', [2.0, 8.0]))
-        }
+        },
+        model_types=model_types,  # NEW: List of model types or None for single model
+        model_probs=model_probs   # NEW: Probabilities for each model type
     )
 
 
@@ -115,18 +121,19 @@ def data_generator(
     config: dict,
     device: torch.device
 ):
-    ## Generates data for a given task 
+    ## Generates data for a given task
     """Generate data for a task."""
     # Just return task features - actual simulation happens in loss function
+    # NEW: Include model type in features (4D instead of 3D)
     task_features = torch.tensor(
-        task_params.to_array(),
+        task_params.to_array(include_model=True),  # 4D: [alpha, A, omega_c, model_encoding]
         dtype=torch.float32,
         device=device
     )
-    
+
     # Repeat for batch
     task_features_batch = task_features.unsqueeze(0).repeat(n_trajectories, 1)
-    
+
     return {
         'task_features': task_features_batch,
         'task_params': task_params,
@@ -265,14 +272,15 @@ def main(config_path: str):
     # Modified data generator to work with environment
     def data_generator_env(task_params, n_trajectories, split):
         """Generate data compatible with environment."""
+        # NEW: Include model type in features (4D instead of 3D)
         task_features = torch.tensor(
-            task_params.to_array(),
+            task_params.to_array(include_model=True),  # 4D: [alpha, A, omega_c, model_encoding]
             dtype=torch.float32,
             device=device
         )
-        
+
         # Repeat for batch
-        task_features_batch = task_features.unsqueeze(0).repeat(n_trajectories, 1)         
+        task_features_batch = task_features.unsqueeze(0).repeat(n_trajectories, 1)
         return {
             'task_features': task_features_batch,
             'task_params': task_params  # Single task params

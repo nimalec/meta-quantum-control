@@ -34,13 +34,73 @@ class NoiseParameters:
     alpha: float   # spectral exponent for 1/f^alpha
     A: float       # amplitude/strength (units chosen so S has [xi^2 * s])
     omega_c: float # cutoff [rad/s]
+    model_type: str = 'one_over_f'  # PSD model type: 'one_over_f', 'lorentzian', 'double_exp'
 
-    def to_array(self) -> np.ndarray:
-        return np.array([self.alpha, self.A, self.omega_c], dtype=float)
+    def to_array(self, include_model: bool = False) -> np.ndarray:
+        """
+        Convert to array representation.
+
+        Args:
+            include_model: If True, encode model_type as 4th dimension.
+                          Default False for backward compatibility.
+
+        Returns:
+            arr: Array [alpha, A, omega_c] or [alpha, A, omega_c, model_encoding]
+        """
+        if include_model:
+            # Encode model type as numeric value
+            model_encoding = self._encode_model_type(self.model_type)
+            return np.array([self.alpha, self.A, self.omega_c, model_encoding], dtype=float)
+        else:
+            return np.array([self.alpha, self.A, self.omega_c], dtype=float)
+
+    @staticmethod
+    def _encode_model_type(model_type: str) -> float:
+        """Encode model type as numeric value for neural network input."""
+        encoding = {
+            'one_over_f': 0.0,
+            'lorentzian': 1.0,
+            'double_exp': 2.0
+        }
+        if model_type not in encoding:
+            raise ValueError(f"Unknown model_type '{model_type}'. Must be one of {list(encoding.keys())}")
+        return encoding[model_type]
+
+    @staticmethod
+    def _decode_model_type(encoding: float) -> str:
+        """Decode numeric value back to model type string."""
+        # Round to nearest integer for robustness
+        rounded = int(round(encoding))
+        decoding = {
+            0: 'one_over_f',
+            1: 'lorentzian',
+            2: 'double_exp'
+        }
+        if rounded not in decoding:
+            raise ValueError(f"Invalid model encoding {encoding}. Must round to 0, 1, or 2")
+        return decoding[rounded]
 
     @classmethod
-    def from_array(cls, arr: np.ndarray) -> "NoiseParameters":
-        return cls(alpha=float(arr[0]), A=float(arr[1]), omega_c=float(arr[2]))
+    def from_array(cls, arr: np.ndarray, has_model: bool = None) -> "NoiseParameters":
+        """
+        Create from array representation.
+
+        Args:
+            arr: Array of parameters
+            has_model: If True, arr has 4 elements [alpha, A, omega_c, model].
+                      If None, inferred from array length.
+
+        Returns:
+            params: NoiseParameters instance
+        """
+        if has_model is None:
+            has_model = len(arr) >= 4
+
+        if has_model:
+            model_type = cls._decode_model_type(float(arr[3]))
+            return cls(alpha=float(arr[0]), A=float(arr[1]), omega_c=float(arr[2]), model_type=model_type)
+        else:
+            return cls(alpha=float(arr[0]), A=float(arr[1]), omega_c=float(arr[2]), model_type='one_over_f')
 
 # ---------- PSD models ----------
 class NoisePSDModel:
@@ -110,14 +170,42 @@ class PSDToLindblad:
 
     Inputs:
       psd_model: returns two-sided angular PSD S(ω) with units [xi^2 * s]
+                 Can be None if using per-task model_type from NoiseParameters
       g_energy_per_xi: coupling coefficient so that (g^2 S)/ħ^2 has units 1/s
                        e.g., frequency noise δω with H_int = (ħ/2) δω σ_z → g = ħ/2
+
+    NEW: Supports dynamic model selection! If psd_model=None, creates model based on
+         task_params.model_type for each call.
     """
 
-    def __init__(self, psd_model: "NoisePSDModel", g_energy_per_xi: float, hbar: float = 1.054_571_817e-34):
-        self.psd_model = psd_model
-        self.gE = float(g_energy_per_xi)  # [J / xi]
+    def __init__(self, psd_model: "NoisePSDModel" = None, g_energy_per_xi: float = None, hbar: float = 1.054_571_817e-34):
+        self.psd_model = psd_model  # Can be None for dynamic model selection
+        self.gE = float(g_energy_per_xi) if g_energy_per_xi is not None else HBAR / 2.0  # [J / xi]
         self.hbar = float(hbar)
+
+        # Cache for dynamically created PSD models
+        self._model_cache = {}
+
+    def _get_psd_model(self, theta: "NoiseParameters") -> "NoisePSDModel":
+        """
+        Get PSD model for task, either from init or created dynamically.
+
+        Args:
+            theta: Task parameters with model_type attribute
+
+        Returns:
+            psd_model: NoisePSDModel instance
+        """
+        if self.psd_model is not None:
+            # Use fixed model from initialization
+            return self.psd_model
+
+        # Dynamic model selection based on task
+        model_type = theta.model_type
+        if model_type not in self._model_cache:
+            self._model_cache[model_type] = NoisePSDModel(model_type=model_type)
+
+        return self._model_cache[model_type]
 
     # ----- filter functions for dephasing -----
     @staticmethod
@@ -142,7 +230,8 @@ class PSDToLindblad:
         T = max(float(T), 1e-15)
         w_max = omega_max_factor / T
         w = np.linspace(0.0, w_max, int(n_w))
-        S_w = self.psd_model.psd(w, theta)                                # [xi^2 * s]
+        psd_model = self._get_psd_model(theta)  # NEW: Dynamic model selection
+        S_w = psd_model.psd(w, theta)                                # [xi^2 * s]
         F = self._F_abs(w * T, sequence)
         integrand = (self.gE ** 2) * S_w * (F / np.maximum(w, 1e-30) ** 2)  # J^2 * s
         chi = (1.0 / np.pi) * np.trapz(integrand, w) / (self.hbar ** 2)     # dimensionless
@@ -166,15 +255,16 @@ class PSDToLindblad:
           - Else:             S_eff = ∫ S(ω) L_Γ(ω-ω0) dω   (L_Γ normalized)
         Γ↑ = e^{-β ħ ω0} Γ↓ if temperature_K provided; else Γ↑=Γ↓ (classical PSD).
         """
+        psd_model = self._get_psd_model(theta)  # NEW: Dynamic model selection
         pref = (self.gE ** 2) / (self.hbar ** 2)  # 1/s per [xi^2 * s]
         if Gamma_h > 0.0:
             w_span = max(span_factor * max(Gamma_h, 1e-12), 5.0 * abs(omega0))
             w = np.linspace(omega0 - w_span, omega0 + w_span, int(n_w))
             L = self._lorentzian_L(w, omega0, Gamma_h)
-            S_w = self.psd_model.psd(w, theta)
+            S_w = psd_model.psd(w, theta)
             S_eff = np.trapz(S_w * L, w)  # [xi^2 * s]
         else:
-            S_eff = float(self.psd_model.psd(np.array([abs(omega0)]), theta)[0])
+            S_eff = float(psd_model.psd(np.array([abs(omega0)]), theta)[0])
 
         Gamma_down = max(pref * S_eff, 0.0)
 
@@ -227,15 +317,31 @@ class PSDToLindblad:
 # ---------- task distribution ----------
 class TaskDistribution:
     """
-    Distribution P over θ = (alpha, A, omega_c).
+    Distribution P over θ = (alpha, A, omega_c, [model_type]).
     Provides 'uniform' and 'gaussian' sampling.
+
+    NEW: Supports mixed model sampling! Set model_types to sample different PSD models.
     """
 
     def __init__(self,
                  dist_type: str = "uniform",
                  ranges: Dict[str, Tuple[float, float]] | None = None,
                  mean: np.ndarray | None = None,
-                 cov: np.ndarray | None = None):
+                 cov: np.ndarray | None = None,
+                 model_types: List[str] | None = None,
+                 model_probs: List[float] | None = None):
+        """
+        Args:
+            dist_type: 'uniform' or 'gaussian'
+            ranges: Parameter ranges for uniform sampling
+            mean: Mean for gaussian sampling
+            cov: Covariance for gaussian sampling
+            model_types: List of PSD model types to sample from.
+                        Examples: ['one_over_f'], ['lorentzian'], or ['one_over_f', 'lorentzian']
+                        If None, defaults to ['one_over_f']
+            model_probs: Probability of sampling each model type. Must sum to 1.
+                        If None, uniform distribution over model_types.
+        """
         self.dist_type = dist_type
         self.ranges = ranges or {
             "alpha":   (0.5, 2.0),
@@ -244,6 +350,18 @@ class TaskDistribution:
         }
         self.mean = mean
         self.cov = cov
+
+        # NEW: Mixed model support
+        self.model_types = model_types or ['one_over_f']
+        if model_probs is None:
+            # Uniform distribution over models
+            self.model_probs = [1.0 / len(self.model_types)] * len(self.model_types)
+        else:
+            if len(model_probs) != len(self.model_types):
+                raise ValueError("model_probs must have same length as model_types")
+            if not np.isclose(sum(model_probs), 1.0):
+                raise ValueError("model_probs must sum to 1.0")
+            self.model_probs = model_probs
 
     def sample(self, n_tasks: int, rng: np.random.Generator | None = None) -> List[NoiseParameters]:
         rng = rng or np.random.default_rng()
@@ -260,23 +378,64 @@ class TaskDistribution:
             alpha   = rng.uniform(*self.ranges["alpha"])
             A       = rng.uniform(*self.ranges["A"])
             omega_c = rng.uniform(*self.ranges["omega_c"])
-            tasks.append(NoiseParameters(alpha=float(alpha), A=float(A), omega_c=float(omega_c)))
+
+            # NEW: Sample model type
+            model_type = rng.choice(self.model_types, p=self.model_probs)
+
+            tasks.append(NoiseParameters(
+                alpha=float(alpha),
+                A=float(A),
+                omega_c=float(omega_c),
+                model_type=model_type
+            ))
         return tasks
 
     def _sample_gaussian(self, n: int, rng: np.random.Generator) -> List[NoiseParameters]:
         if self.mean is None or self.cov is None:
             raise ValueError("Gaussian sampling requires 'mean' and 'cov'")
         samples = rng.multivariate_normal(self.mean, self.cov, size=n)
-        return [NoiseParameters.from_array(s) for s in samples]
+
+        # NEW: Add model types
+        tasks = []
+        for sample in samples:
+            model_type = rng.choice(self.model_types, p=self.model_probs)
+            task = NoiseParameters.from_array(sample, has_model=False)
+            task.model_type = model_type
+            tasks.append(task)
+
+        return tasks
 
     def compute_variance(self) -> float:
+        """
+        Compute variance of task distribution.
+
+        NOTE: This computes variance of continuous parameters only.
+        Mixed model sampling adds additional variance from categorical model_type,
+        which significantly increases effective task diversity!
+        """
         if self.dist_type == "uniform":
             var_alpha = ((self.ranges["alpha"][1]   - self.ranges["alpha"][0])   ** 2) / 12.0
             var_A     = ((self.ranges["A"][1]       - self.ranges["A"][0])       ** 2) / 12.0
             var_omega = ((self.ranges["omega_c"][1] - self.ranges["omega_c"][0]) ** 2) / 12.0
+
+            # NEW: Add variance contribution from mixed models
+            # This is a rough estimate of the additional diversity
+            if len(self.model_types) > 1:
+                # Categorical variance: p(1-p) for binary, generalized for multiple categories
+                model_variance = sum([p * (1 - p) for p in self.model_probs])
+                print(f"INFO: Mixed model variance contribution: {model_variance:.4f}")
+                return float(var_alpha + var_A + var_omega + model_variance)
+
             return float(var_alpha + var_A + var_omega)
         elif self.dist_type == "gaussian":
-            return float(np.trace(self.cov))
+            base_var = float(np.trace(self.cov))
+
+            # Add model variance if mixed
+            if len(self.model_types) > 1:
+                model_variance = sum([p * (1 - p) for p in self.model_probs])
+                return base_var + model_variance
+
+            return base_var
         return 0.0
 
 # ---------- utilities ----------
