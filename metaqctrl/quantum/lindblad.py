@@ -288,8 +288,8 @@ if __name__ == "__main__":
     
     # Example Lindblad operator (dephasing)
     T_op = 1 
-    gamma_1 =0.7
-    gamma_2 = 0.7
+    gamma_1 =1e-3
+    gamma_2 = 1e-3
    # L_ops = [np.sqrt(gamma) * sigma_z]
     L_ops = [np.sqrt(gamma_1) * sig_p, np.sqrt(gamma_2) * sigma_z ]
     
