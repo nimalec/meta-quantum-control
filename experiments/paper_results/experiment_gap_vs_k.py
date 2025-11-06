@@ -42,7 +42,6 @@ def exponential_model(K, gap_max, mu_eta):
 
 def run_gap_vs_k_experiment(
     meta_policy_path: str,
-    robust_policy_path: str,
     config: Dict,
     k_values: List[int] = [1, 2, 3, 5, 7, 10, 15, 20],
     n_test_tasks: int = 100,
@@ -75,12 +74,6 @@ def run_gap_vs_k_experiment(
         meta_policy_path, config, eval_mode=False, verbose=True
     )
 
-    # Load robust policy with automatic architecture detection
-    print("Loading robust policy...")
-    robust_policy = load_policy_from_checkpoint(
-        robust_policy_path, config, eval_mode=True, verbose=True
-    )
-
     # Create quantum environment
     print("\n[2/6] Creating quantum environment...")
     # target_state will be created from config['target_gate']
@@ -101,43 +94,43 @@ def run_gap_vs_k_experiment(
     test_tasks = task_dist.sample(n_test_tasks)
 
     # Optionally compute GRAPE baseline (independent of K)
-    fidelities_grape = []
-    if include_grape:
-        print(f"\n[4/7] Computing GRAPE baseline (once for all K)...")
-        for i, task in enumerate(test_tasks):
-            if i % 10 == 0:
-                print(f"    Task {i}/{n_test_tasks}...", end='\r')
+    # fidelities_grape = []
+    # if include_grape:
+    #     print(f"\n[4/7] Computing GRAPE baseline (once for all K)...")
+    #     for i, task in enumerate(test_tasks):
+    #         if i % 10 == 0:
+    #             print(f"    Task {i}/{n_test_tasks}...", end='\r')
 
-            # Create GRAPE optimizer for this task
-            grape = GRAPEOptimizer(
-                n_segments=config['n_segments'],
-                n_controls=config['n_controls'],
-                T=config.get('horizon', 1.0),
-                learning_rate=0.1,
-                method='adam',
-                device=torch.device('cpu')
-            )
+    #         # Create GRAPE optimizer for this task
+    #         grape = GRAPEOptimizer(
+    #             n_segments=config['n_segments'],
+    #             n_controls=config['n_controls'],
+    #             T=config.get('horizon', 1.0),
+    #             learning_rate=0.1,
+    #             method='adam',
+    #             device=torch.device('cpu')
+    #         )
 
-            # Define simulation function for GRAPE
-            def simulate_fn(controls_np, task_params):
-                return env.compute_fidelity(controls_np, task_params)
+    #         # Define simulation function for GRAPE
+    #         def simulate_fn(controls_np, task_params):
+    #             return env.compute_fidelity(controls_np, task_params)
 
-            # Optimize with GRAPE
-            optimal_controls = grape.optimize(
-                simulate_fn=simulate_fn,
-                task_params=task,
-                max_iterations=grape_iterations,
-                verbose=False
-            )
+    #         # Optimize with GRAPE
+    #         optimal_controls = grape.optimize(
+    #             simulate_fn=simulate_fn,
+    #             task_params=task,
+    #             max_iterations=grape_iterations,
+    #             verbose=False
+    #         )
 
-            # Compute final fidelity
-            fid_grape = env.compute_fidelity(optimal_controls, task)
-            fidelities_grape.append(fid_grape)
+    #         # Compute final fidelity
+    #         fid_grape = env.compute_fidelity(optimal_controls, task)
+    #         fidelities_grape.append(fid_grape)
 
-        grape_mean = np.mean(fidelities_grape)
-        grape_std = np.std(fidelities_grape) / np.sqrt(n_test_tasks)
-        print(f"\n    GRAPE Fidelity = {grape_mean:.4f} ± {grape_std:.4f}")
-        print()
+    #     grape_mean = np.mean(fidelities_grape)
+    #     grape_std = np.std(fidelities_grape) / np.sqrt(n_test_tasks)
+    #     print(f"\n    GRAPE Fidelity = {grape_mean:.4f} ± {grape_std:.4f}")
+    #     print()
 
     # Measure gap for each K
     print(f"\n[5/7] Computing gaps for K = {k_values}...")
@@ -151,7 +144,7 @@ def run_gap_vs_k_experiment(
         fidelities_robust = []
 
         for i, task in enumerate(test_tasks):
-            if i % 20 == 0:
+            if i % 2 == 0:
                 print(f"    Task {i}/{n_test_tasks}...", end='\r')
 
             task_features = torch.tensor(
@@ -160,10 +153,10 @@ def run_gap_vs_k_experiment(
             )
 
             # Robust policy (no adaptation)
-            with torch.no_grad():
-                controls_robust = robust_policy(task_features).detach().numpy()
-            fid_robust = env.compute_fidelity(controls_robust, task)
-            fidelities_robust.append(fid_robust)
+            #with torch.no_grad():
+            #    controls_robust = robust_policy(task_features).detach().numpy()
+            #fid_robust = env.compute_fidelity(controls_robust, task)
+            #fidelities_robust.append(fid_robust)
 
             # Meta policy with K adaptation steps
             # CRITICAL FIX: Clone policy for each task to avoid mutation
@@ -194,7 +187,8 @@ def run_gap_vs_k_experiment(
             fidelities_meta.append(fid_meta)
 
         # Compute gap for this K
-        gap_tasks = np.array(fidelities_meta) - np.array(fidelities_robust)
+        gap_tasks = np.array(fidelities_meta)   
+        #gap_tasks = np.array(fidelities_meta) - np.array(fidelities_robust)
         gap_mean = np.mean(gap_tasks)
         gap_std = np.std(gap_tasks) / np.sqrt(n_test_tasks)  # Standard error
 
@@ -229,7 +223,6 @@ def run_gap_vs_k_experiment(
         print(f"\n  Fitted parameters:")
         print(f"    gap_max = {gap_max_fit:.4f}")
         print(f"    μη = {mu_eta_fit:.4f}")
-        print(f"    R² = {r2:.4f}")
 
         fit_success = True
     except Exception as e:
@@ -263,10 +256,6 @@ def run_gap_vs_k_experiment(
 
     with open(f"{output_dir}/results.json", 'w') as f:
         json.dump(results, f, indent=2)
-
-    print("\n" + "=" * 80)
-    print("EXPERIMENT COMPLETE")
-    print("=" * 80)
 
     return results
 
@@ -337,10 +326,7 @@ def plot_gap_vs_k(results: Dict, output_path: str = "results/gap_vs_k/figure.pdf
 
 
 @app.command()
-def main(
-    meta_path: Path = Path("experiments/train_scripts/checkpoints/maml_best_pauli_x_best_policy.pt"),
-    robust_path: Path = Path("experiments/train_scripts/checkpoints/robust_minimax_20251103_184653_best_policy.pt")
-):
+def main( meta_path: Path = Path("experiments/train_scripts/checkpoints/maml_best_pauli_x_best_policy.pt")) :
     # Configuration matching paper Section 5
     config = {
         'num_qubits': 1,
@@ -361,14 +347,10 @@ def main(
     if not meta_path.exists():
         raise RecursionError(f"Can not find: {meta_path}")
     print(f"Using meta policy: {meta_path}")
-    if not robust_path.exists():
-        raise RecursionError(f"Can not find: {robust_path}")
-    print(f"Using robust policy: {robust_path}")
 
     # Run experiment
     results = run_gap_vs_k_experiment(
         meta_policy_path=meta_path,
-        robust_policy_path=robust_path,
         config=config,
         k_values=[1, 2, 3, 5, 7, 10, 15, 20],
         n_test_tasks=2,

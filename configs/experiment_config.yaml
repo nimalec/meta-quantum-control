@@ -10,10 +10,11 @@ noise_type: 'frequency'
 
 
 # Task Distribution
+#(0.1, 4.0), "A": (100, 1e5), "omega_c": (0, 800) 
 task_dist_type: 'uniform'
-alpha_range: [0.5, 2.0]      # Spectral exponent range
-A_range: [0.001, 1]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
-omega_c_range: [1000, 100000]    # Cutoff frequency range
+alpha_range: [0.1, 4.0]      # Spectral exponent range
+A_range: [100, 1e5]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
+omega_c_range: [0, 800]    # Cutoff frequency range
 # Policy Network
 task_feature_dim: 3
 hidden_dim: 256

@@ -275,8 +275,8 @@ class TaskDistribution:
             var_omega = ((self.ranges["omega_c"][1] - self.ranges["omega_c"][0]) ** 2) / 12.0
             return float(var_alpha + var_A + var_omega)
         elif self.dist_type == "gaussian":
+           # return 0.0
             return float(np.trace(self.cov))
-        return 0.0
 
 # ---------- utilities ----------
 def psd_distance(psd_model: NoisePSDModel,
@@ -293,10 +293,10 @@ if __name__ == "__main__":
     # 1) Task distribution over PSD params (keep your ranges)
     task_dist = TaskDistribution(
         dist_type="uniform",
-        ranges={"alpha": (0.5, 2.0), "A": (0.05, 0.3), "omega_c": (2.0, 8.0)}
+        ranges={"alpha": (0.1, 4.0), "A": (100, 1e5), "omega_c": (0, 800)}
     )
     rng = np.random.default_rng()
-    tasks = task_dist.sample(5, rng)
+    tasks = task_dist.sample(10, rng)
 
     print("Sampled tasks:")
     for i, t in enumerate(tasks):
@@ -310,8 +310,8 @@ if __name__ == "__main__":
     converter = PSDToLindblad(psd_model, g_energy_per_xi=HBAR/2)
 
     # 4) Set qubit transition and experiment window (generic)
-    omega0 = 2 * np.pi * 5e6   # 5 MHz (rad/s)
-    T = 50e-6                  # 50 μs window
+    omega0 = 2 * np.pi    # 5 MHz (rad/s)
+    T = 1                  # 50 μs window
     sequence = "ramsey"        # 'ramsey' | 'echo' | 'cpmg_n'
     temperature_K = None       # classical PSD ⇒ Γ↑=Γ↓
     Gamma_h = 0.0              # set >0 to include homogeneous broadening (rad/s)
@@ -326,7 +326,7 @@ if __name__ == "__main__":
     # 6) (Optional) visualize PSDs
     try:
         import matplotlib.pyplot as plt
-        omega = np.logspace(-1, 2, 1000)
+        omega = np.logspace(-1, 3, 1000)
         plt.figure(figsize=(9, 5))
         for i, t in enumerate(tasks):
             S = psd_model.psd(omega, t)
