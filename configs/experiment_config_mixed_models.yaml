@@ -14,7 +14,6 @@
 # - Better transfer to held-out noise models
 
 # Random seed
-seed: 42
 
 # Quantum System
 # NOTE: psd_model is ignored when model_types is specified

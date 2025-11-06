@@ -26,7 +26,6 @@ from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters, PS
 from metaqctrl.quantum.gates import state_fidelity
 from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.meta_rl.maml import MAML
-from metaqctrl.baselines.robust_control import RobustPolicy, GRAPEOptimizer
 from metaqctrl.theory.quantum_environment import create_quantum_environment
 from metaqctrl.theory.optimality_gap import OptimalityGapComputer, GapConstants
 from metaqctrl.theory.physics_constants import estimate_all_constants
@@ -46,15 +45,11 @@ def run_gap_vs_k_experiment(
     k_values: List[int] = [1, 2, 3, 5, 7, 10, 15, 20],
     n_test_tasks: int = 100,
     output_dir: str = "results/gap_vs_k",
-    include_grape: bool = True,
-    grape_iterations: int = 100
 ) -> Dict:
     """
     Main experiment: measure optimality gap as function of adaptation steps K
 
     Args:
-        include_grape: Whether to include GRAPE baseline comparison
-        grape_iterations: Number of GRAPE optimization iterations per task
 
     Returns:
         results: Dictionary containing gaps, fits, and validation metrics
@@ -93,44 +88,6 @@ def run_gap_vs_k_experiment(
     )
     test_tasks = task_dist.sample(n_test_tasks)
 
-    # Optionally compute GRAPE baseline (independent of K)
-    # fidelities_grape = []
-    # if include_grape:
-    #     print(f"\n[4/7] Computing GRAPE baseline (once for all K)...")
-    #     for i, task in enumerate(test_tasks):
-    #         if i % 10 == 0:
-    #             print(f"    Task {i}/{n_test_tasks}...", end='\r')
-
-    #         # Create GRAPE optimizer for this task
-    #         grape = GRAPEOptimizer(
-    #             n_segments=config['n_segments'],
-    #             n_controls=config['n_controls'],
-    #             T=config.get('horizon', 1.0),
-    #             learning_rate=0.1,
-    #             method='adam',
-    #             device=torch.device('cpu')
-    #         )
-
-    #         # Define simulation function for GRAPE
-    #         def simulate_fn(controls_np, task_params):
-    #             return env.compute_fidelity(controls_np, task_params)
-
-    #         # Optimize with GRAPE
-    #         optimal_controls = grape.optimize(
-    #             simulate_fn=simulate_fn,
-    #             task_params=task,
-    #             max_iterations=grape_iterations,
-    #             verbose=False
-    #         )
-
-    #         # Compute final fidelity
-    #         fid_grape = env.compute_fidelity(optimal_controls, task)
-    #         fidelities_grape.append(fid_grape)
-
-    #     grape_mean = np.mean(fidelities_grape)
-    #     grape_std = np.std(fidelities_grape) / np.sqrt(n_test_tasks)
-    #     print(f"\n    GRAPE Fidelity = {grape_mean:.4f} ± {grape_std:.4f}")
-    #     print()
 
     # Measure gap for each K
     print(f"\n[5/7] Computing gaps for K = {k_values}...")
@@ -152,14 +109,7 @@ def run_gap_vs_k_experiment(
                 dtype=torch.float32
             )
 
-            # Robust policy (no adaptation)
-            #with torch.no_grad():
-            #    controls_robust = robust_policy(task_features).detach().numpy()
-            #fid_robust = env.compute_fidelity(controls_robust, task)
-            #fidelities_robust.append(fid_robust)
 
-            # Meta policy with K adaptation steps
-            # CRITICAL FIX: Clone policy for each task to avoid mutation
             import copy
             adapted_policy = copy.deepcopy(meta_policy_template)
             adapted_policy.train()
@@ -243,13 +193,6 @@ def run_gap_vs_k_experiment(
             'mu_eta': float(mu_eta_fit) if fit_success else None,
             'r2': float(r2) if fit_success else None
         },
-        'grape': {
-            'included': include_grape,
-            'fidelities': fidelities_grape if include_grape else [],
-            'mean': float(grape_mean) if include_grape else None,
-            'std': float(grape_std) if include_grape else None,
-            'iterations': grape_iterations if include_grape else None
-        },
         'config': config,
         'n_test_tasks': n_test_tasks
     }
@@ -291,30 +234,8 @@ def plot_gap_vs_k(results: Dict, output_path: str = "results/gap_vs_k/figure.pdf
             color='darkred', linewidth=2
         )
 
-    # Add GRAPE baseline as horizontal line
-    if results['grape']['included']:
-        grape_mean = results['grape']['mean']
-        grape_std = results['grape']['std']
-        ax.axhline(
-            y=grape_mean,
-            color='green',
-            linestyle='-',
-            linewidth=2,
-            label=f'GRAPE Baseline (fid={grape_mean:.3f}±{grape_std:.3f})',
-            alpha=0.7
-        )
-        # Add shaded region for GRAPE uncertainty
-        ax.fill_between(
-            [0, max(k_values)],
-            grape_mean - grape_std,
-            grape_mean + grape_std,
-            color='green',
-            alpha=0.2
-        )
-
     ax.set_xlabel('Adaptation Steps (K)', fontsize=14, fontweight='bold')
     ax.set_ylabel('Fidelity / Optimality Gap', fontsize=14, fontweight='bold')
-    ax.set_title('Meta-Learning Gap vs Adaptation Steps (with GRAPE Baseline)', fontsize=16, fontweight='bold')
     ax.legend(fontsize=11, loc='lower right')
     ax.grid(True, alpha=0.3)
     ax.tick_params(labelsize=12)
@@ -331,10 +252,10 @@ def main( meta_path: Path = Path("experiments/train_scripts/checkpoints/maml_bes
     config = {
         'num_qubits': 1,
         'n_controls': 2,
-        'n_segments': 20,
+        'n_segments': 100,
         'horizon': 1.0,
-        'target_gate': 'hadamard',
-        'hidden_dim': 128,
+        'target_gate': 'pauli_x',
+        'hidden_dim': 256,
         'n_hidden_layers': 2,
         'inner_lr': 0.01,
         'alpha_range': [0.5, 2.0],
@@ -353,9 +274,8 @@ def main( meta_path: Path = Path("experiments/train_scripts/checkpoints/maml_bes
         meta_policy_path=meta_path,
         config=config,
         k_values=[1, 2, 3, 5, 7, 10, 15, 20],
-        n_test_tasks=2,
-        output_dir="results/gap_vs_k", 
-        include_grape = False
+        n_test_tasks=60,
+        output_dir="results/gap_vs_k"  
     )
 
     # Generate figure
