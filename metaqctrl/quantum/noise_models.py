@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """
 Noise Models and PSD Parameterization (Backward Compatibility Wrapper)
 
@@ -37,6 +38,12 @@ from metaqctrl.quantum.noise_models_v2 import (
     TWO_PI,
     HBAR
 )
+=======
+import numpy as np
+from scipy.special import gamma as gamma_func
+from typing import Tuple, List, Dict
+from dataclasses import dataclass
+>>>>>>> 7fb7d9e310f4c4d0cfa3d62371195b2e94509f7d
 
 # Maintain backward compatibility with old imports
 __all__ = [

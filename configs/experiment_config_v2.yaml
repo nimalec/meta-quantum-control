@@ -1,13 +1,8 @@
 # Meta-RL for Quantum Control - Experiment Configuration
 
 # Quantum System
-<<<<<<< HEAD
-psd_model: 'one_over_f'  # 'one_over_f', 'lorentzian', 'double_exp' (used if model_types not specified)
-horizon: 1.0  # Total evolution time (arbitrary units)
-=======
 psd_model: 'one_over_f'  # 'one_over_f', 'lorentzian', 'double_exp'
 horizon: 0.00005  # Total evolution time (arbitrary units)
->>>>>>> 7fb7d9e310f4c4d0cfa3d62371195b2e94509f7d
 target_gate: 'pauli_x'  # 'hadamard', 'pauli_x', 'pauli_y'
 omega0: 30000000
 noise_type: 'frequency'
@@ -17,23 +12,6 @@ noise_type: 'frequency'
 # Task Distribution
 #(0.1, 4.0), "A": (100, 1e5), "omega_c": (0, 800) 
 task_dist_type: 'uniform'
-<<<<<<< HEAD
-
-alpha_range: [0.5, 2.0]      # Spectral exponent range
-A_range: [0.001, 0.01]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
-omega_c_range: [100, 1000]    # Cutoff frequency range
-
-# NEW: Mixed Model Sampling (comment out for single model mode)
-# Uncomment to enable mixed model sampling across different PSD types
-# model_types: ['one_over_f', 'lorentzian']  # List of model types to sample
-# model_probs: [0.5, 0.5]  # Probabilities (must sum to 1.0). If omitted, uniform distribution
-
-# Policy Network
-task_feature_dim: 4  # NEW: Changed from 3 to 4 to include model_type encoding
-hidden_dim: 64
-n_hidden_layers: 1
-n_segments: 20
-=======
 alpha_range: [0.1, 4.0]      # Spectral exponent range
 A_range: [100, 1e5]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
 omega_c_range: [0, 800]    # Cutoff frequency range
@@ -42,7 +20,6 @@ task_feature_dim: 3
 hidden_dim: 256
 n_hidden_layers: 2
 n_segments: 100
->>>>>>> 7fb7d9e310f4c4d0cfa3d62371195b2e94509f7d
 n_controls: 2
 output_scale: 2.0  # FIXED: Increased from 1.0 to allow stronger control signals for better gate fidelity
 activation: 'tanh'

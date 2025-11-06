@@ -270,21 +270,26 @@ class LindbladJAX:
 
 # Example usage
 if __name__ == "__main__":
+    ##Takeaway --> T = 1 
+    #  Note H0 = 0.5 * sigma_z 
+    #N_segments = 100  
     # 1-qubit system
     from scipy.linalg import expm
+    from metaqctrl.quantum.gates import *
     
     # Pauli matrices
     sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
     sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
     sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
-    sig_p = 0.5*(sigma_x-1j*sigma_y)
+    sig_p = np.array([[0, 1], [0, 0]], dtype=complex)
     
     H0 = 0.5 * sigma_z  # Drift
     H_controls = [sigma_x, sigma_y]  # Control Hamiltonians
     
     # Example Lindblad operator (dephasing)
-    gamma_1 = 0.001 
-    gamma_2 = 0.1 
+    T_op = 1 
+    gamma_1 =0.7
+    gamma_2 = 0.7
    # L_ops = [np.sqrt(gamma) * sigma_z]
     L_ops = [np.sqrt(gamma_1) * sig_p, np.sqrt(gamma_2) * sigma_z ]
     
@@ -294,14 +299,33 @@ if __name__ == "__main__":
     rho0 = np.array([[1, 0], [0, 0]], dtype=complex)
     
     # Random control sequence
-    n_segments = 20
-   # controls = np.random.randn(n_segments, 2) * 0.5
-    controls = np.ones((n_segments, 2)) * 0.5
+    n_segments = 100 
+    controls = np.ones((n_segments, 2))  
     
-    rho_final, traj = sim.evolve(rho0, controls, T=1.0)
+    rho_final, traj = sim.evolve(rho0, controls, T=T_op)
     
-    print("Initial state:")
-    print(rho0)
-    print("\nFinal state:")
-    print(rho_final)
-    print(f"\nPurity: {np.trace(rho_final @ rho_final).real:.4f}")
+    ket_0 = np.array([1, 0], dtype=complex)
+    ket_1 = np.array([0, 1], dtype=complex)  
+    rho_0 = np.outer(ket_0, ket_0.conj())
+    rho_1 = np.outer(ket_1, ket_1.conj())
+
+   
+    # # Target gates
+    # print("\nTarget gates:")
+    gates = TargetGates()
+    
+    X = gates.pauli_x()
+    rho_X = X @ rho_0 @ X.conj().T  
+    
+    
+    # gate_x_compute = GateFidelityComputer(X)
+    # achieved_fidelity = gate_x_compute.compute(rho_0) 
+    # print( achieved_fidelity)
+    fid = state_fidelity(rho_X,  rho_final)   
+    print(fid)
+    
+    # print("Initial state:")
+    # print(rho0)
+    # print("\nFinal state:")
+    # print(rho_final)
+    # print(f"\nPurity: {np.trace(rho_final @ rho_final).real:.4f}")

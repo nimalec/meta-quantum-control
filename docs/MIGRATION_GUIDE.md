@@ -4,19 +4,6 @@
 
 The noise modeling system has been upgraded from `noise_models.py` (v1) to `noise_models_v2.py` (v2) with physics-correct implementations. A **backward-compatible adapter** (`noise_adapter.py`) ensures all existing code continues to work while benefiting from improved physics.
 
-## What Changed?
-
-### Physics Improvements
-
-| Feature | v1 (Old) | v2 (New) |
-|---------|----------|----------|
-| **Dephasing** | ❌ Simple PSD sampling | ✅ Filter function theory: χ(T) = ∫ (g²S/ω²) \|F(ωT)\| dω |
-| **Relaxation** | ❌ Arbitrary frequency | ✅ Golden rule at ω₀: Γ = (g²/ℏ²) S(ω₀) |
-| **Energy Coupling** | ❌ Dimensionless | ✅ Physical units: g [J/xi] |
-| **Temperature** | ❌ Not supported | ✅ Detailed balance: Γ↑ = e^(-βℏω₀) Γ↓ |
-| **Sequences** | ❌ Not supported | ✅ Ramsey, Echo, CPMG_n |
-| **Units** | ⚠️ Inconsistent | ✅ Full dimensional analysis |
-
 ### Key Physics Corrections
 
 1. **Dephasing now uses filter functions**:
@@ -33,15 +20,6 @@ The noise modeling system has been upgraded from `noise_models.py` (v1) to `nois
 
 ## Migration Status: ✅ COMPLETE
 
-All files have been updated to use the adapter:
-
-- ✅ `metaqctrl/quantum/noise_adapter.py` - **NEW** adapter layer
-- ✅ `metaqctrl/theory/quantum_environment.py` - Updated imports and factory
-- ✅ `metaqctrl/theory/batched_processing.py` - Updated imports
-- ✅ `metaqctrl/theory/optimality_gap.py` - Updated imports (2 locations)
-- ✅ `metaqctrl/theory/physics_constants.py` - Updated imports
-- ✅ `metaqctrl/utils/plots.py` - Updated imports
-- ✅ `experiments/train_scripts/train_meta.py` - Updated with physics parameters
 
 ## For Users: No Code Changes Required! 🎉
 
@@ -150,10 +128,10 @@ pytest tests/test_noise_migration.py -v
 ```
 
 Tests verify:
-- ✅ Backward compatibility (old API works)
-- ✅ Physics correctness (echo suppresses dephasing, etc.)
-- ✅ Integration (QuantumEnvironment, caching, etc.)
-- ✅ No breaking changes
+- Backward compatibility (old API works)
+- Physics correctness (echo suppresses dephasing, etc.)
+- Integration (QuantumEnvironment, caching, etc.)
+- No breaking changes
 
 ## Example: Training with New Physics
 
@@ -221,77 +199,7 @@ g_charge = get_coupling_for_noise_type('charge')   # e * 1μV
 g_amp = get_coupling_for_noise_type('amplitude')   # ℏ/2
 ```
 
-## FAQs
-
-### Q: Will my existing results change?
-
-**A:** Yes, slightly. The physics is now more accurate, so fidelities may differ by 5-15%. This is expected and physically correct. Old results used approximate physics.
-
-### Q: Do I need to retrain my models?
-
-**A:** Not immediately. Existing checkpoints will load fine. However, for publication-quality results, we recommend retraining with v2 physics for quantitative accuracy.
-
-### Q: Can I still use v1 physics?
-
-**A:** Yes, but not recommended. Set `use_v2_physics=False` in PSDToLindblad for debugging/comparison only.
-
-### Q: What if I don't know my qubit frequency?
-
-**A:** No problem! The adapter estimates it from your Hamiltonian H₀. Or just leave it unspecified for a reasonable default.
-
-### Q: Will this affect my paper/thesis?
-
-**A:** Positively! v2 physics is publication-ready with proper units and theory. Reviewers will appreciate the correctness.
-
-## Troubleshooting
-
-### Issue: Import Error
-
-```python
-# Error: ModuleNotFoundError: No module named 'metaqctrl.quantum.noise_adapter'
+rter.omega0/2/np.pi/1e6:.2f} MHz")
 ```
 
-**Solution:** Make sure you're in the right directory and the file exists:
 
-```bash
-ls metaqctrl/quantum/noise_adapter.py  # Should exist
-```
-
-### Issue: Rates seem too high/low
-
-**Solution:** Check your coupling constant and units:
-
-```python
-converter = PSDToLindblad(...)
-print(f"Using g = {converter.g_energy_per_xi:.3e} J/xi")
-print(f"omega0 = {converter.omega0/2/np.pi/1e6:.2f} MHz")
-```
-
-### Issue: Tests failing
-
-**Solution:** Run tests with verbose output:
-
-```bash
-pytest tests/test_noise_migration.py -v --tb=short
-```
-
-If specific tests fail, check the error message for details.
-
-## Support
-
-For questions or issues:
-
-1. Check this guide first
-2. Run the test suite: `python tests/test_noise_migration.py`
-3. Look at the example usage in `metaqctrl/quantum/noise_adapter.py` (bottom of file)
-4. Open an issue with details
-
-## Summary
-
-✅ **Migration complete!** All code uses v2 physics via adapter.
-✅ **Backward compatible!** Existing code works without changes.
-✅ **Physics correct!** Filter functions, Golden rule, proper units.
-✅ **Well tested!** Comprehensive test suite included.
-✅ **Easy to use!** Sensible defaults, optional advanced control.
-
-The migration is **transparent** - you can continue using the old API while benefiting from improved physics automatically. Enjoy more accurate quantum control! 🎉

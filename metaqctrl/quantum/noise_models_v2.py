@@ -298,7 +298,6 @@ class PSDToLindblad:
         L_plus  = np.array([[0, 1], [0, 0]], dtype=complex)  # |e><g|
 
         ops = [np.sqrt(Gamma_down) * L_minus,
-               np.sqrt(Gamma_up)   * L_plus,
                np.sqrt(gamma_phi)  * L_phi]
         rates = np.array([Gamma_down, Gamma_up, gamma_phi], dtype=float)
         return ops, rates
@@ -428,6 +427,7 @@ class TaskDistribution:
 
             return float(var_alpha + var_A + var_omega)
         elif self.dist_type == "gaussian":
+<<<<<<< HEAD
             base_var = float(np.trace(self.cov))
 
             # Add model variance if mixed
@@ -437,6 +437,10 @@ class TaskDistribution:
 
             return base_var
         return 0.0
+=======
+           # return 0.0
+            return float(np.trace(self.cov))
+>>>>>>> 7fb7d9e310f4c4d0cfa3d62371195b2e94509f7d
 
 # ---------- utilities ----------
 def psd_distance(psd_model: NoisePSDModel,
@@ -453,10 +457,10 @@ if __name__ == "__main__":
     # 1) Task distribution over PSD params (keep your ranges)
     task_dist = TaskDistribution(
         dist_type="uniform",
-        ranges={"alpha": (0.5, 2.0), "A": (0.05, 0.3), "omega_c": (2.0, 8.0)}
+        ranges={"alpha": (0.1, 4.0), "A": (100, 1e5), "omega_c": (0, 800)}
     )
-    rng = np.random.default_rng(42)
-    tasks = task_dist.sample(5, rng)
+    rng = np.random.default_rng()
+    tasks = task_dist.sample(10, rng)
 
     print("Sampled tasks:")
     for i, t in enumerate(tasks):
@@ -470,8 +474,8 @@ if __name__ == "__main__":
     converter = PSDToLindblad(psd_model, g_energy_per_xi=HBAR/2)
 
     # 4) Set qubit transition and experiment window (generic)
-    omega0 = 2 * np.pi * 5e6   # 5 MHz (rad/s)
-    T = 50e-6                  # 50 μs window
+    omega0 = 2 * np.pi    # 5 MHz (rad/s)
+    T = 1                  # 50 μs window
     sequence = "ramsey"        # 'ramsey' | 'echo' | 'cpmg_n'
     temperature_K = None       # classical PSD ⇒ Γ↑=Γ↓
     Gamma_h = 0.0              # set >0 to include homogeneous broadening (rad/s)
@@ -486,7 +490,7 @@ if __name__ == "__main__":
     # 6) (Optional) visualize PSDs
     try:
         import matplotlib.pyplot as plt
-        omega = np.logspace(-1, 2, 1000)
+        omega = np.logspace(-1, 3, 1000)
         plt.figure(figsize=(9, 5))
         for i, t in enumerate(tasks):
             S = psd_model.psd(omega, t)
