@@ -25,7 +25,6 @@ from metaqctrl.quantum.noise_models import TaskDistribution, NoiseParameters, PS
 from metaqctrl.quantum.gates import state_fidelity
 from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.meta_rl.maml import MAML
-from metaqctrl.baselines.robust_control import RobustPolicy, GRAPEOptimizer
 from metaqctrl.theory.quantum_environment import create_quantum_environment
 from metaqctrl.theory.optimality_gap import OptimalityGapComputer, GapConstants
 from metaqctrl.theory.physics_constants import compute_control_relevant_variance
@@ -55,9 +54,9 @@ def create_task_distributions_with_varying_variance(
     distributions = []
 
     # Base configuration (full ranges from config)
-    alpha_full_range = base_config.get('alpha_range', [0.5, 2.0])
-    A_full_range = base_config.get('A_range', [0.05, 0.3])
-    omega_c_full_range = base_config.get('omega_c_range', [2.0, 8.0])
+    alpha_full_range = base_config.get('alpha_range', [0.1, 4.0])
+    A_full_range = base_config.get('A_range', [10, 100000])
+    omega_c_full_range = base_config.get('omega_c_range', [1, 100])
 
     # Centers
     alpha_center = np.mean(alpha_full_range)
@@ -68,27 +67,28 @@ def create_task_distributions_with_varying_variance(
     alpha_max_hw = (alpha_full_range[1] - alpha_full_range[0]) / 2
     A_max_hw = (A_full_range[1] - A_full_range[0]) / 2
     omega_c_max_hw = (omega_c_full_range[1] - omega_c_full_range[0]) / 2
-
+    
     for var_scale in variance_levels:
         # Normalize var_scale to [0, 1] range
         # Assume max variance corresponds to full parameter ranges
         # Scale factor: sqrt for variance -> std -> range
-        scale_factor = np.sqrt(var_scale / max(variance_levels))
+        #scale_factor = np.sqrt(var_scale / max(variance_levels))
+        scale_factor  = var_scale 
 
         # Scale half-widths proportionally
         alpha_hw = alpha_max_hw * scale_factor
         A_hw = A_max_hw * scale_factor
         omega_c_hw = omega_c_max_hw * scale_factor
 
-        # Create ranges (no clipping!)
         task_dist = TaskDistribution(
             dist_type='uniform',
             ranges={
-                'alpha': (alpha_center - alpha_hw, alpha_center + alpha_hw),
-                'A': (A_center - A_hw, A_center + A_hw),
-                'omega_c': (omega_c_center - omega_c_hw, omega_c_center + omega_c_hw)
+                'alpha': (alpha_full_range[0],   alpha_full_range[1]),          
+                'A':  (scale_factor* A_full_range[0], scale_factor*A_full_range[1]),    
+                'omega_c': (omega_c_full_range[0], omega_c_full_range[1])
             }
-        )
+        )        
+        
 
         # Compute expected parameter variance for this distribution
         expected_var = task_dist.compute_variance()
@@ -111,9 +111,7 @@ def run_gap_vs_variance_experiment(
     variance_levels: List[float] = [0.0001, 0.001, 0.004, 0.01, 0.025],
     K_fixed: int = 5,
     n_test_tasks: int = 100,
-    output_dir: str = "results/gap_vs_variance",
-    include_grape: bool = False,
-    grape_iterations: int = 100
+    output_dir: str = "results/gap_vs_variance" 
 ) -> Dict:
     """
     Main experiment: measure optimality gap as function of task variance σ²_S
@@ -140,11 +138,6 @@ def run_gap_vs_variance_experiment(
         meta_policy_path, config, eval_mode=False, verbose=True
     )
 
-    # Load robust policy with automatic architecture detection
-    print("\nLoading robust policy...")
-    robust_policy = load_policy_from_checkpoint(
-        robust_policy_path, config, eval_mode=True, verbose=True
-    )
 
     # Create quantum environment
     print("\n[2/6] Creating quantum environment...")
@@ -164,8 +157,7 @@ def run_gap_vs_variance_experiment(
     variances_computed = []
     gaps_mean = []
     gaps_std = []
-    gaps_all = []
-    grape_fidelities_all = [] if include_grape else None
+    gaps_all = [] 
 
     for idx, (task_dist, var_expected) in enumerate(task_dists):
         print(f"\n  Variance level {idx+1}/{len(task_dists)}:")
@@ -188,11 +180,10 @@ def run_gap_vs_variance_experiment(
         print(f"    Sampled ω_c: [{params_array[:, 2].min():.3f}, {params_array[:, 2].max():.3f}]")
 
         fidelities_meta = []
-        fidelities_robust = []
-        fidelities_grape = []
+
 
         for i, task in enumerate(test_tasks):
-            if i % 20 == 0:
+            if i % 2 == 0:
                 print(f"    Task {i}/{n_test_tasks}...", end='\r')
 
             task_features = torch.tensor(
@@ -200,11 +191,6 @@ def run_gap_vs_variance_experiment(
                 dtype=torch.float32
             )
 
-            # Robust policy (no adaptation)
-            with torch.no_grad():
-                controls_robust = robust_policy(task_features).detach().numpy()
-            fid_robust = env.compute_fidelity(controls_robust, task)
-            fidelities_robust.append(fid_robust)
 
             # Meta policy with K_fixed adaptation steps
             # Clone policy for this task
@@ -213,8 +199,6 @@ def run_gap_vs_variance_experiment(
             adapted_policy.train()
 
             for k in range(K_fixed):
-                # Compute loss with gradients
-                # FIXED: Pass device parameter explicitly
                 loss = env.compute_loss_differentiable(
                     adapted_policy, task, device=torch.device('cpu')
                 )
@@ -234,31 +218,9 @@ def run_gap_vs_variance_experiment(
             fid_meta = env.compute_fidelity(controls_meta, task)
             fidelities_meta.append(fid_meta)
 
-            # GRAPE baseline (if enabled)
-            if include_grape:
-                grape = GRAPEOptimizer(
-                    n_segments=config['n_segments'],
-                    n_controls=config['n_controls'],
-                    T=config.get('horizon', 1.0),
-                    learning_rate=0.1,
-                    method='adam',
-                    device=torch.device('cpu')
-                )
-
-                def simulate_fn(controls_np, task_params):
-                    return env.compute_fidelity(controls_np, task_params)
-
-                optimal_controls = grape.optimize(
-                    simulate_fn=simulate_fn,
-                    task_params=task,
-                    max_iterations=grape_iterations,
-                    verbose=False
-                )
-                fid_grape = env.compute_fidelity(optimal_controls, task)
-                fidelities_grape.append(fid_grape)
-
         # Compute gap for this variance level
-        gap_tasks = np.array(fidelities_meta) - np.array(fidelities_robust)
+       # gap_tasks = np.array(fidelities_meta) - np.array(fidelities_robust)
+        gap_tasks = np.array(fidelities_meta)
         gap_mean = np.mean(gap_tasks)
         gap_std = np.std(gap_tasks) / np.sqrt(n_test_tasks)  # Standard error
 
@@ -266,17 +228,6 @@ def run_gap_vs_variance_experiment(
         gaps_std.append(gap_std)
         gaps_all.append(gap_tasks.tolist())
 
-        if include_grape:
-            grape_mean = np.mean(fidelities_grape)
-            grape_std = np.std(fidelities_grape) / np.sqrt(n_test_tasks)
-            grape_fidelities_all.append({
-                'mean': float(grape_mean),
-                'std': float(grape_std),
-                'values': fidelities_grape
-            })
-            print(f"    Gap = {gap_mean:.4f} ± {gap_std:.4f}, GRAPE = {grape_mean:.4f} ± {grape_std:.4f}")
-        else:
-            print(f"    Gap = {gap_mean:.4f} ± {gap_std:.4f}")
 
     # Fit theoretical model
     print("\n[5/7] Fitting theoretical model...")
@@ -322,11 +273,6 @@ def run_gap_vs_variance_experiment(
             'slope': float(slope_fit) if fit_success else None,
             'r2': float(r2) if fit_success else None
         },
-        'grape': {
-            'included': include_grape,
-            'fidelities_per_variance': grape_fidelities_all if include_grape else [],
-            'iterations': grape_iterations if include_grape else None
-        },
         'config': config,
         'n_test_tasks': n_test_tasks
     }
@@ -369,17 +315,7 @@ def plot_gap_vs_variance(results: Dict, output_path: str = "results/gap_vs_varia
             color='darkred', linewidth=2
         )
 
-    # Plot GRAPE baseline per variance level
-    if results['grape']['included']:
-        grape_means = [d['mean'] for d in results['grape']['fidelities_per_variance']]
-        grape_stds = [d['std'] for d in results['grape']['fidelities_per_variance']]
-        ax1.errorbar(
-            variances, grape_means, yerr=grape_stds,
-            fmt='s', markersize=8, capsize=4, capthick=2,
-            label='GRAPE Baseline',
-            color='green', linewidth=2, alpha=0.7
-        )
-
+    # Plot GRAPE baseline per variance level 
     ax1.set_xlabel('Task Parameter Variance ($\\sigma^2_{params}$)',
                    fontsize=14, fontweight='bold')
     ax1.set_ylabel('Optimality Gap (Meta - Robust)', fontsize=14, fontweight='bold')
@@ -399,7 +335,7 @@ def plot_gap_vs_variance(results: Dict, output_path: str = "results/gap_vs_varia
 
     # Add text showing if monotonic
     is_monotonic = all(variances[i] <= variances[i+1] for i in range(len(variances)-1))
-    status_text = "✓ Monotonic" if is_monotonic else "✗ NOT Monotonic"
+    status_text = " Monotonic" if is_monotonic else " NOT Monotonic"
     status_color = 'green' if is_monotonic else 'red'
     ax2.text(0.05, 0.95, status_text, transform=ax2.transAxes,
              fontsize=14, fontweight='bold', color=status_color,
@@ -418,47 +354,40 @@ def plot_gap_vs_variance(results: Dict, output_path: str = "results/gap_vs_varia
     plt.close()
 
 @app.command()
-def main(
-    meta_path: Path = Path("experiments/train_scripts/checkpoints/maml_best_pauli_x_best_policy.pt"),
-    robust_path: Path = Path("experiments/train_scripts/checkpoints/robust_minimax_20251103_184653_best_policy.pt")
-):
+def main(meta_path: Path = Path("../experiments/train_scripts/checkpoints/maml_best_pauli_x_best_policy.pt")): 
     # Configuration matching paper Section 5
     config = {
         'num_qubits': 1,
         'n_controls': 2,
         'n_segments': 20,
         'horizon': 1.0,
-        'target_gate': 'hadamard',
-        'hidden_dim': 128,
+        'target_gate': 'pauli_x',
+        'hidden_dim': 256,
         'n_hidden_layers': 2,
         'inner_lr': 0.01,
-        'alpha_range': [0.5, 2.0],
-        'A_range': [0.05, 0.3],
-        'omega_c_range': [2.0, 8.0],
-        'noise_frequencies': [1.0, 5.0, 10.0]
+        'alpha_range': [0.1, 4.0],
+        'A_range': [50, 100000],
+        'omega_c_range': [2.0, 80],
+        'noise_frequencies': np.linspace(0,1000,1000).tolist()
     }
 
     # Check if models exist
-    if not os.path.exists(meta_path) or not os.path.exists(robust_path):
+    if not os.path.exists(meta_path):
         print("ERROR: Trained models not found")
-        print("Please train policies first using experiments/train_meta.py and train_robust.py")
+        print("Please train policies first using experiments/train_meta.py ")
         sys.exit(1)
 
     # Run experiment with FIXED parameters
     results = run_gap_vs_variance_experiment(
         meta_policy_path=meta_path,
-        robust_policy_path=robust_path,
         config=config,
-        variance_levels=[0.0001, 0.001, 0.004, 0.02, 0.25],  # FIXED: Better range
-        K_fixed=1,
-        n_test_tasks=10,  # FIXED: Increased from 2 to 100 for proper statistics
-        output_dir="results/gap_vs_variance",
-        include_grape=False
-    )
+        variance_levels=[0.0001, 0.001, 0.004, 0.02, 0.25, 0.5, 1],  # FIXED: Better range
+        K_fixed=5,
+        n_test_tasks=60,  # FIXED: Increased from 2 to 100 for proper statistics
+        output_dir="results/gap_vs_variance")
 
     # Generate figure
     plot_gap_vs_variance(results)
-
 
 if __name__ == "__main__":
     app()

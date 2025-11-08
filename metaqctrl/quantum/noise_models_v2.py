@@ -58,7 +58,7 @@ class NoiseParameters:
     def _encode_model_type(model_type: str) -> float:
         """Encode model type as numeric value for neural network input."""
         encoding = {
-            'one_over_f': 0.0,
+            'one_over_f': 0.0, 
             'lorentzian': 1.0,
             'double_exp': 2.0
         }
@@ -178,10 +178,10 @@ class PSDToLindblad:
          task_params.model_type for each call.
     """
 
-    def __init__(self, psd_model: "NoisePSDModel" = None, g_energy_per_xi: float = None, hbar: float = 1.054_571_817e-34):
+    def __init__(self, psd_model: "NoisePSDModel" = None, g_energy_per_xi: float = None):
         self.psd_model = psd_model  # Can be None for dynamic model selection
         self.gE = float(g_energy_per_xi) if g_energy_per_xi is not None else HBAR / 2.0  # [J / xi]
-        self.hbar = float(hbar)
+        self.hbar = 1.054_571_817e-34 
 
         # Cache for dynamically created PSD models
         self._model_cache = {}
@@ -223,18 +223,19 @@ class PSDToLindblad:
         raise ValueError(f"Unknown sequence '{sequence}'")
 
     def dephasing_rate(self, theta: "NoiseParameters", T: float, sequence: str = "ramsey",
-                       omega_max_factor: float = 20.0, n_w: int = 4000) -> float:
+                       omega_max_factor: float = 1000.0, n_w: int = 4000) -> float:
         """
         γ_φ = χ(T)/T, χ(T) = (1/π ħ²) ∫₀^∞ dω [ (gE)² S(ω;θ) / ω² ] |F(ωT)|.
         """
-        T = max(float(T), 1e-15)
         w_max = omega_max_factor / T
         w = np.linspace(0.0, w_max, int(n_w))
         psd_model = self._get_psd_model(theta)  # NEW: Dynamic model selection
         S_w = psd_model.psd(w, theta)                                # [xi^2 * s]
         F = self._F_abs(w * T, sequence)
-        integrand = (self.gE ** 2) * S_w * (F / np.maximum(w, 1e-30) ** 2)  # J^2 * s
-        chi = (1.0 / np.pi) * np.trapz(integrand, w) / (self.hbar ** 2)     # dimensionless
+        #integrand = (self.gE ** 2) * S_w * (F / np.maximum(w, 1e-30) ** 2)  # J^2 * s
+        integrand =  S_w * (F / np.maximum(w, 1e-30) ** 2)  # J^2 * s
+      #  chi = (1.0 / np.pi) * np.trapz(integrand, w) / (self.hbar ** 2)     # dimensionless
+        chi = (1.0 / np.pi) * np.trapz(integrand, w)
         gamma_phi = max(chi / T, 0.0)                                        # 1/s
         return gamma_phi
 
@@ -244,19 +245,14 @@ class PSDToLindblad:
         """Normalized Lorentzian line shape centered at w0, FWHM=Gamma_h."""
         return (Gamma_h / 2.0) / np.pi / ((w - w0) ** 2 + (Gamma_h / 2.0) ** 2)
 
-    def relaxation_rates(self, theta: "NoiseParameters", omega0: float,
-                         temperature_K: float | None = None,
-                         Gamma_h: float = 0.0,
-                         span_factor: float = 50.0,
-                         n_w: int = 4001) -> Tuple[float, float]:
+    def relaxation_rates(self, theta: "NoiseParameters", omega0: float, Gamma_h: float = 0.0, span_factor: float = 50.0, n_w: int = 4001) -> Tuple[float, float]:
         """
         Γ↓, Γ↑ from S_eff at ω0:
           - If Gamma_h == 0:  S_eff = S(ω0)
           - Else:             S_eff = ∫ S(ω) L_Γ(ω-ω0) dω   (L_Γ normalized)
         Γ↑ = e^{-β ħ ω0} Γ↓ if temperature_K provided; else Γ↑=Γ↓ (classical PSD).
         """
-        psd_model = self._get_psd_model(theta)  # NEW: Dynamic model selection
-        pref = (self.gE ** 2) / (self.hbar ** 2)  # 1/s per [xi^2 * s]
+        psd_model = self._get_psd_model(theta)  # NEW: Dynamic model selection 
         if Gamma_h > 0.0:
             w_span = max(span_factor * max(Gamma_h, 1e-12), 5.0 * abs(omega0))
             w = np.linspace(omega0 - w_span, omega0 + w_span, int(n_w))
@@ -266,16 +262,9 @@ class PSDToLindblad:
         else:
             S_eff = float(psd_model.psd(np.array([abs(omega0)]), theta)[0])
 
-        Gamma_down = max(pref * S_eff, 0.0)
+        Gamma_down = max( S_eff, 0.0)
+        return Gamma_down 
 
-        if temperature_K is None:
-            Gamma_up = Gamma_down
-        else:
-            import scipy.constants as sc
-            beta = 1.0 / (sc.k * float(temperature_K))
-            Gamma_up = max(np.exp(-beta * self.hbar * abs(omega0)) * Gamma_down, 0.0)
-
-        return Gamma_down, Gamma_up
 
     # ----- assemble qubit jump operators -----
     def qubit_lindblad_ops(self, theta: "NoiseParameters", *,
@@ -293,7 +282,7 @@ class PSDToLindblad:
         L_phi = (1.0 / np.sqrt(2.0)) * np.array([[1, 0], [0, -1]], dtype=complex)
 
         # relaxation
-        Gamma_down, Gamma_up = self.relaxation_rates(theta, omega0, temperature_K, Gamma_h)
+        Gamma_down = self.relaxation_rates(theta, omega0, temperature_K, Gamma_h)
         L_minus = np.array([[0, 0], [1, 0]], dtype=complex)  # |g><e|
         L_plus  = np.array([[0, 1], [0, 0]], dtype=complex)  # |e><g|
 
@@ -343,9 +332,9 @@ class TaskDistribution:
         """
         self.dist_type = dist_type
         self.ranges = ranges or {
-            "alpha":   (0.5, 2.0),
-            "A":       (0.01, 0.5),
-            "omega_c": (1.0, 10.0),
+            "alpha":   (0.5, 4.0),
+            "A":       (10, 1e5),
+            "omega_c": (1.0,80),
         }
         self.mean = mean
         self.cov = cov
@@ -373,21 +362,23 @@ class TaskDistribution:
 
     def _sample_uniform(self, n: int, rng: np.random.Generator) -> List[NoiseParameters]:
         tasks: List[NoiseParameters] = []
+        #amps = []  
         for _ in range(n):
             alpha   = rng.uniform(*self.ranges["alpha"])
             A       = rng.uniform(*self.ranges["A"])
             omega_c = rng.uniform(*self.ranges["omega_c"])
 
             # NEW: Sample model type
-            model_type = rng.choice(self.model_types, p=self.model_probs)
-
+            model_type = rng.choice(self.model_types, p=self.model_probs) 
             tasks.append(NoiseParameters(
-                alpha=float(alpha),
-                A=float(A),
-                omega_c=float(omega_c),
-                model_type=model_type
+                alpha,
+                A,
+                omega_c,
+               model_type
             ))
+            #amps.append(A)
         return tasks
+        #return amps  
 
     def _sample_gaussian(self, n: int, rng: np.random.Generator) -> List[NoiseParameters]:
         if self.mean is None or self.cov is None:
@@ -400,8 +391,7 @@ class TaskDistribution:
             model_type = rng.choice(self.model_types, p=self.model_probs)
             task = NoiseParameters.from_array(sample, has_model=False)
             task.model_type = model_type
-            tasks.append(task)
-
+            tasks.append(task) 
         return tasks
 
     def compute_variance(self) -> float:
@@ -436,9 +426,6 @@ class TaskDistribution:
                 return base_var + model_variance
 
             return base_var
-        #return 0.0
-           # return 0.0
-            #return float(np.trace(self.cov))
 
 # ---------- utilities ----------
 def psd_distance(psd_model: NoisePSDModel,
@@ -455,7 +442,7 @@ if __name__ == "__main__":
     # 1) Task distribution over PSD params (keep your ranges)
     task_dist = TaskDistribution(
         dist_type="uniform",
-        ranges={"alpha": (0.1, 4.0), "A": (100, 1e5), "omega_c": (0, 800)}
+        ranges={"alpha": (0.1, 4.0), "A": (10, 1e5), "omega_c": (0, 80)}
     )
     rng = np.random.default_rng()
     tasks = task_dist.sample(10, rng)
@@ -503,14 +490,6 @@ if __name__ == "__main__":
         print("\nSaved PSD plot → psd_samples.png")
     except Exception as e:
         print(f"(Plot skipped) {e}")
-
-    # 7) Pairwise PSD distances
-    print("\nPairwise PSD sup distances:")
-    omega_grid = np.logspace(-1, 2, 500)
-    for i in range(len(tasks)):
-        for j in range(i+1, len(tasks)):
-            d = psd_distance(psd_model, tasks[i], tasks[j], omega_grid)
-            print(f"  d(task{i}, task{j}) = {d:.4e}")
 
     # 8) Variance of task distribution (for your theory bounds)
     print(f"\nσ²_θ (sum of per-dim variances) = {task_dist.compute_variance():.4f}")

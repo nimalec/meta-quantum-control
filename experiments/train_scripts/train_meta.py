@@ -30,31 +30,31 @@ def create_quantum_system(config: dict):
     sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
     
     # System Hamiltonians ==> initialize Hamiltonian
-    drift_strength = config.get('drift_strength', 0.1)
+    drift_strength = config.get('drift_strength')
     H0 = drift_strength * sigma_z  # Drift (small non-zero for better dynamics)
     H_controls = [sigma_x, sigma_y]  # Control Hamiltonians
 
     # PSD model ==> define a PSD noise model
-    psd_model = NoisePSDModel(model_type=config.get('psd_model', 'one_over_f'))
+    psd_model = NoisePSDModel(model_type=config.get('psd_model'))
 
     # Sampling frequencies ==> define sample frequencies across control bandwidth
     omega_sample = np.linspace(1, 1e5, 1000)
 
     # Physics parameters for v2 (with sensible defaults)
-    T = config.get('horizon', 1.0)  # Gate time
+    T = config.get('horizon')  # Gate time
 
     # Estimate qubit frequency from Hamiltonian
-    omega0 = config.get('omega0', None)
+    omega0 = config.get('omega0')
     if omega0 is None:
         omega0 = estimate_qubit_frequency_from_hamiltonian(H0)
 
     # Get coupling for noise type
-    noise_type = config.get('noise_type', 'frequency')
+    noise_type = config.get('noise_type')
     g_energy_per_xi =None 
     if g_energy_per_xi is None:
         g_energy_per_xi = get_coupling_for_noise_type(noise_type)
 
-    sequence = config.get('sequence', 'ramsey')
+    sequence = config.get('sequence')
     temperature_K = None 
     Gamma_h = 0 
 
@@ -83,8 +83,8 @@ def create_task_distribution(config: dict):
     ## Create a distribution of tasks , generating P
     """Create task distribution P (with optional mixed model support)."""
     # NEW: Support for mixed model sampling
-    model_types = config.get('model_types', None)
-    model_probs = config.get('model_probs', None)
+    model_types = config.get('model_types')
+    model_probs = config.get('model_probs')
 
     return TaskDistribution(
         dist_type=config.get('task_dist_type', 'uniform'),
@@ -147,8 +147,8 @@ def create_loss_function(env, device, config):
     """Create loss function using QuantumEnvironment."""
 
     # GPU-optimized settings from config
-    dt = config.get('dt_training', 0.01)  # Default to 0.01 if not specified
-    use_rk4 = config.get('use_rk4_training', True)  # Default to RK4 if not specified
+    dt = config.get('dt_training')  # Default to 0.01 if not specified
+    use_rk4 = config.get('use_rk4_training'  # Default to RK4 if not specified
 
     def loss_fn(policy: torch.nn.Module, data: dict):
         ## define a loss function
@@ -199,7 +199,7 @@ def main(config_path: str):
     
     # Target gate (e.g., Hadamard)
     ## Establish target operation  --> trained to optimize a pauli-x operator  
-    target_gate_name = config.get('target_gate', 'pauli_x')
+    target_gate_name = config.get('target_gate') 
     if target_gate_name == 'hadamard':
         U_target = TargetGates.hadamard()
     elif target_gate_name == 'pauli_x':
@@ -232,13 +232,13 @@ def main(config_path: str):
     # Create policy
     print("Creating policy network...")
     policy = PulsePolicy(
-        task_feature_dim=config.get('task_feature_dim', 3),
-        hidden_dim=config.get('hidden_dim', 128),
-        n_hidden_layers=config.get('n_hidden_layers', 2),
-        n_segments=config.get('n_segments', 20),
-        n_controls=config.get('n_controls', 2),
-        output_scale=config.get('output_scale', 1.0),
-        activation=config.get('activation', 'tanh')
+        task_feature_dim=config.get('task_feature_dim'),
+        hidden_dim=config.get('hidden_dim'),
+        n_hidden_layers=config.get('n_hidden_layers'),
+        n_segments=config.get('n_segments'),
+        n_controls=config.get('n_controls'),
+        output_scale=config.get('output_scale'),
+        activation=config.get('activation')
     )
     ## Make a policy  
     policy = policy.to(device)
@@ -249,10 +249,10 @@ def main(config_path: str):
     print("\nInitializing MAML...")
     maml = MAML(
         policy=policy,
-        inner_lr=config.get('inner_lr', 0.01),
-        inner_steps=config.get('inner_steps', 5),
-        meta_lr=config.get('meta_lr', 0.001),
-        first_order=config.get('first_order', False),
+        inner_lr=config.get('inner_lr'),
+        inner_steps=config.get('inner_steps'),
+        meta_lr=config.get('meta_lr'),
+        first_order=config.get('first_order'),
         device=device
     )
     print(f"  Inner: {maml.inner_steps} steps @ lr={maml.inner_lr}")
@@ -291,10 +291,10 @@ def main(config_path: str):
         task_sampler=lambda n, split: task_sampler(n, split, task_dist, rng),
         data_generator=data_generator_env,
         loss_fn=loss_fn,
-        n_support=config.get('n_support', 10),
-        n_query=config.get('n_query', 10),
-        log_interval=config.get('log_interval', 10),
-        val_interval=config.get('val_interval', 50)
+        n_support=config.get('n_support'),
+        n_query=config.get('n_query'),
+        log_interval=config.get('log_interval'),
+        val_interval=config.get('val_interval')
     )
     
     # Create save directory
@@ -310,9 +310,9 @@ def main(config_path: str):
     print("=" * 70 + "\n")
     
     trainer.train(
-        n_iterations=config.get('n_iterations', 200),
-        tasks_per_batch=config.get('tasks_per_batch', 15),
-        val_tasks=config.get('val_tasks', 15),
+        n_iterations=config.get('n_iterations'),
+        tasks_per_batch=config.get('tasks_per_batch'),
+        val_tasks=config.get('val_tasks'),
         save_path=str(save_path)
     )
     
