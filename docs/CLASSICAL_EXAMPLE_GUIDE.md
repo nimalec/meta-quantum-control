@@ -70,26 +70,7 @@ Task   Mass    Length  Friction   Pre-Loss   Post-Loss  Gain
 ...
 ```
 
-**Key metric: Gain should be positive!** This means adaptation is helping.
 
-## What This Validates
-
-✅ **MAML gradients flow correctly** - If pendulum works, your MAML implementation is sound
-✅ **Inner loop adaptation** - Policy improves after K gradient steps
-✅ **Meta-learning beats baseline** - Adapted policy outperforms zero-shot
-✅ **Code integration** - Policy, loss function, data generation all work together
-
-## Comparison: Pendulum vs Quantum
-
-| Metric | Pendulum | Quantum |
-|--------|----------|---------|
-| Simulation time | 0.005s | 0.5s |
-| Training time (500 iter) | ~10 min | ~2 hours |
-| **Speedup** | **12x faster** | baseline |
-| State dimension | 2 | 4 |
-| Physics complexity | Newton's 2nd law | Lindblad master equation |
-
-**Use case**: Debug MAML on pendulum (fast), then apply to quantum (slower).
 
 ## Troubleshooting
 
