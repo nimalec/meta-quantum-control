@@ -103,16 +103,7 @@ python train_meta_pendulum.py --inner_lr 0.005 --meta_lr 0.0005
 python train_meta_pendulum.py --inner_steps 10
 ```
 
-### Issue: No adaptation gain (negative gain)
 
-This means **MAML isn't working**. Possible causes:
-1. Learning rates too high/low
-2. Task distribution too narrow (no diversity)
-3. Gradient flow broken (check tests pass)
-
-**Fix before running quantum experiments!**
-
-### Issue: NaN losses
 
 ```bash
 # Use first-order MAML (more stable)
@@ -140,9 +131,6 @@ python train_meta_pendulum.py --inner_lr 0.001 --meta_lr 0.0001
        save_dir="results/figures/classical"
    )
    ```
-
-3. Add to appendix with caption:
-   > "We validated our MAML implementation on classical pendulum control before applying to quantum systems. Meta-learning achieves 3.2x lower error after adaptation compared to non-adaptive baseline (mean ± std: 2.1 ± 0.3 vs 7.8 ± 1.2), demonstrating the generality of our approach."
 
 ### Ablation Studies (fast!)
 
@@ -183,46 +171,4 @@ Uses custom `torch.autograd.Function` with numerical gradients (finite differenc
 
 ```python
 ∂L/∂u_i ≈ [L(u_i + ε) - L(u_i)] / ε
-```
-
-**Note**: Not as accurate as analytical gradients, but sufficient for MAML validation.
-
-### Task Distribution
-
-Uniform sampling:
-- Mass: [0.5, 2.0] kg
-- Length: [0.5, 1.5] m
-- Friction: [0.0, 0.3]
-
-Variance: σ² ≈ 0.27
-
-## Next Steps
-
-1. ✅ **Verify pendulum MAML works** (you are here)
-2. → **Apply to quantum control** with confidence
-3. → **Compare results** (pendulum vs quantum)
-4. → **Add to paper** (appendix figure)
-
-## Key Takeaway
-
-**If MAML doesn't work on pendulum, it won't work on quantum.**
-
-Debug here first - it's 12x faster!
-
----
-
-## Help & Documentation
-
-- Full docs: `metaqctrl/classical/README.md`
-- Tests: `tests/test_pendulum.py`
-- Training script: `experiments/train_scripts/train_meta_pendulum.py`
-
-## Questions?
-
-Check that:
-- All 17 tests pass: `pytest tests/test_pendulum.py`
-- Adaptation gain is positive
-- Meta loss decreases over training
-- Training completes without NaN/Inf
-
-If all of the above check out, your MAML implementation is solid! 🎉
+``` 
