@@ -436,13 +436,15 @@ class QuantumEnvironment:
         # may not set requires_grad on outputs, but still maintain grad_fn
         has_grad_connection = (controls.grad_fn is not None) or controls.requires_grad
         if not has_grad_connection:
-            import warnings
-            warnings.warn(
-                f"WARNING: Controls may not have gradient connection!\n"
-                f"  This could cause MAML training to fail.\n"
-                f"  controls.requires_grad: {controls.requires_grad}\n"
-                f"  controls.grad_fn: {controls.grad_fn}"
-            )
+            print(f"\nWARNING [compute_loss_differentiable]: Controls have NO gradient connection!")
+            print(f"  controls.requires_grad: {controls.requires_grad}")
+            print(f"  controls.grad_fn: {controls.grad_fn}")
+            print(f"  task_features.requires_grad: {task_features.requires_grad}")
+            print(f"  task_features.grad_fn: {task_features.grad_fn}")
+            # Check policy parameters
+            policy_params_have_grad = any(p.requires_grad for p in policy.parameters())
+            print(f"  policy has parameters with requires_grad: {policy_params_have_grad}")
+            print(f"  policy training mode: {policy.training}")
 
         # CRITICAL OPTIMIZATION: Get cached simulator instead of creating new one!
         sim = self.get_torch_simulator(task_params, device, dt=dt, use_rk4=use_rk4)

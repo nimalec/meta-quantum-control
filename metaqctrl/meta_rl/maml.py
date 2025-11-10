@@ -93,31 +93,49 @@ class MAML:
             adapted_policy: Policy after K adaptation steps
             losses: List of losses at each step
         """
-        ##Number of adaptation steps (K) 
+        ##Number of adaptation steps (K)
         num_steps = num_steps or self.inner_steps
-        
+
         # Clone policy for this task
-        ## Make policy 
+        ## Make policy
         adapted_policy = deepcopy(self.policy)
-        #Train the policy 
+        #Train the policy
         adapted_policy.train()
-        
+
+        # CRITICAL FIX: Ensure all parameters require gradients after deepcopy
+        # This is necessary for loss.backward() to work in the inner loop
+        for param in adapted_policy.parameters():
+            param.requires_grad = True
+
         # Inner optimizer
         inner_optimizer = optim.SGD(adapted_policy.parameters(), lr=self.inner_lr)
         
         losses = []
         support_data = task_data['support']
-        #Perform K steps 
+        #Perform K steps
         for step in range(num_steps):
-            #Clear gradients 
+            #Clear gradients
             inner_optimizer.zero_grad()
-            
+
             # Compute loss on support set
             loss = loss_fn(adapted_policy, support_data)
-            ##use this for plotting 
+            ##use this for plotting
             losses.append(loss.item())
-            
-            # Gradient step
+
+            # Gradient step - check for gradient connection before backward
+            if loss.grad_fn is None and not loss.requires_grad:
+                print(f"\n{'='*70}")
+                print(f"ERROR: Loss has no gradient connection in inner_loop!")
+                print(f"{'='*70}")
+                print(f"  Step: {step}/{num_steps}")
+                print(f"  Loss value: {loss.item()}")
+                print(f"  loss.requires_grad: {loss.requires_grad}")
+                print(f"  loss.grad_fn: {loss.grad_fn}")
+                raise RuntimeError(
+                    "Loss tensor has no gradient connection!\n"
+                    "The quantum simulator or loss function is not differentiable."
+                )
+
             loss.backward()
             inner_optimizer.step()
         
@@ -392,12 +410,22 @@ class MAML:
                         else:
                             meta_param.grad += adapted_grad.clone()
 
-            # FIXED: Check for NaN/Inf and skip task entirely to avoid gradient issues
+            # CRITICAL FIX: Check for NaN/Inf AND missing gradients
+            # Skip tasks that would corrupt gradient flow
+            has_gradients = query_loss.requires_grad or (query_loss.grad_fn is not None)
+
             if torch.isnan(query_loss) or torch.isinf(query_loss):
                 print(f"WARNING: Invalid loss detected (NaN or Inf): {query_loss.item()}")
                 print(f"  Inner losses: {inner_losses}")
                 print(f"  Skipping this task to preserve gradient flow")
                 # Skip this task - don't accumulate it
+                continue
+
+            if not has_gradients:
+                print(f"WARNING: Loss has no gradients (requires_grad={query_loss.requires_grad}, grad_fn={query_loss.grad_fn})")
+                print(f"  Loss value: {query_loss.item()}")
+                print(f"  This task will be skipped to prevent gradient corruption")
+                # Skip this task - it would break meta-gradient computation
                 continue
 
             # CRITICAL FIX: Accumulate query losses as tensors to preserve gradient graph
