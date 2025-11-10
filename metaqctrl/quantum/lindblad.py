@@ -280,16 +280,16 @@ if __name__ == "__main__":
     # Pauli matrices
     sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
     sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
-    sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
+    sigma_z = (1.0 / np.sqrt(2.0)) * np.array([[1, 0], [0, -1]], dtype=complex)
     sig_p = np.array([[0, 1], [0, 0]], dtype=complex)
     
     H0 = 0.5 * sigma_z  # Drift
     H_controls = [sigma_x, sigma_y]  # Control Hamiltonians
     
     # Example Lindblad operator (dephasing)
-    T_op = 1 
-    gamma_1 = 0.5
-    gamma_2 = 3 
+    T_op = 0.1 
+    gamma_1 = 10          
+    gamma_2 = 100        
    # L_ops = [np.sqrt(gamma) * sigma_z]
     L_ops = [np.sqrt(gamma_1) * sig_p, np.sqrt(gamma_2) * sigma_z ]
     
@@ -299,7 +299,7 @@ if __name__ == "__main__":
     rho0 = np.array([[1, 0], [0, 0]], dtype=complex)
     
     # Random control sequence
-    n_segments = 100 
+    n_segments = 20  
     controls = np.ones((n_segments, 2))  
     
     rho_final, traj = sim.evolve(rho0, controls, T=T_op)

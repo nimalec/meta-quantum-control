@@ -10,8 +10,7 @@ import torch
 from typing import Dict, Tuple, Optional
 from functools import lru_cache
 from metaqctrl.quantum.lindblad import LindbladSimulator
-from metaqctrl.quantum.lindblad_torch import DifferentiableLindbladSimulator, numpy_to_torch_complex
-# Use adapter for backward-compatible v2 physics
+from metaqctrl.quantum.lindblad_torch import DifferentiableLindbladSimulator, numpy_to_torch_complex  
 from metaqctrl.quantum.noise_adapter import NoiseParameters
 from metaqctrl.quantum.gates import state_fidelity
 
@@ -32,7 +31,7 @@ class QuantumEnvironment:
         H_controls: list,
         psd_to_lindblad,
         target_state: np.ndarray,
-        T: float = 1.0,
+        T: float = 0.1,
         method: str = 'RK45',
         target_unitary: np.ndarray = None
     ):
@@ -574,8 +573,8 @@ def get_target_state_from_config(config: dict) -> Tuple[np.ndarray, np.ndarray]:
     """
     from metaqctrl.quantum.gates import TargetGates
 
-    target_gate_name = config.get('target_gate', 'pauli_x')
-    num_qubits = config.get('num_qubits', 1)
+    target_gate_name = config.get('target_gate')
+    num_qubits = config.get('num_qubits')
 
     # Get target unitary
     if target_gate_name == 'hadamard':
@@ -616,11 +615,11 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
     Returns:
         env: QuantumEnvironment instance
     """
-    from metaqctrl.quantum.noise_adapter import NoisePSDModel, PSDToLindblad, estimate_qubit_frequency_from_hamiltonian, get_coupling_for_noise_type
+    from metaqctrl.quantum.noise_adapter import PSDToLindblad2, estimate_qubit_frequency_from_hamiltonian    
 
     # Get number of qubits from config
-    num_qubits = config.get('num_qubits', 1)
-
+    num_qubits = config.get('num_qubits')
+ 
     # Get target state and unitary if not provided
     if target_state is None or target_unitary is None:
         target_state, target_unitary = get_target_state_from_config(config)
@@ -633,7 +632,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
 
         # System Hamiltonians
         # FIXED: Use small non-zero drift for better dynamics
-        drift_strength = config.get('drift_strength', 0.1)
+        drift_strength = config.get('drift_strength')
         H0 = drift_strength * sigma_z
         H_controls = [sigma_x, sigma_y]
 
@@ -654,7 +653,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
 
         # CRITICAL FIX: Non-zero drift Hamiltonian for 2-qubit
         # Use ZZ interaction as drift (common in superconducting qubits)
-        drift_strength = config.get('drift_strength', 0.5)  # Stronger for 2-qubit
+        drift_strength = config.get('drift_strength')  # Stronger for 2-qubit
         I = np.eye(2, dtype=complex)
         Z = np.array([[1, 0], [0, -1]], dtype=complex)
         ZZ = np.kron(Z, Z)  # ZZ interaction
@@ -669,10 +668,10 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
     # PSD model - NEW: Support for mixed models
     # If config specifies multiple model_types, use dynamic model selection (psd_model=None)
     # Otherwise, create fixed model for backward compatibility
-    model_types = config.get('model_types', None)
+    model_types = config.get('model_types')
     if model_types is None:
         # Single model mode (backward compatibility)
-        psd_model = NoisePSDModel(model_type=config.get('psd_model', 'one_over_f'))
+        psd_model = NoisePSDModel(model_type=config.get('psd_model'))
     else:
         # Mixed model mode - use dynamic selection
         psd_model = None
@@ -686,35 +685,29 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
 
     # Physics parameters for v2 (with sensible defaults)
     # Estimate qubit frequency from Hamiltonian if not provided
-    omega0 = config.get('omega0', None)
+    omega0 = config.get('omega0')
     if omega0 is None:
         omega0 = estimate_qubit_frequency_from_hamiltonian(H0)
 
     # Get coupling constant for noise type
-    noise_type = config.get('noise_type', 'frequency')  # 'frequency', 'magnetic', 'charge', 'amplitude'
-    g_energy_per_xi = config.get('g_energy_per_xi', None)
-    if g_energy_per_xi is None:
-        g_energy_per_xi = get_coupling_for_noise_type(noise_type)
+    noise_type = config.get('noise_type')  # 'frequency', 'magnetic', 'charge', 'amplitude'
+
 
     # Pulse sequence for dephasing filter function
-    sequence = config.get('sequence', 'ramsey')  # 'ramsey', 'echo', 'cpmg_n'
-
-    # Temperature (None = classical noise, Γ↑=Γ↓)
-    temperature_K = config.get('temperature_K', None)
+    sequence = config.get('sequence')  # 'ramsey', 'echo', 'cpmg_n'
 
     # Homogeneous broadening (rad/s)
-    Gamma_h = config.get('Gamma_h', 0.0)
+    Gamma_h = config.get('Gamma_h')
+
 
     # PSD to Lindblad converter (uses v2 physics via adapter)
-    psd_to_lindblad = PSDToLindblad(
+    psd_to_lindblad = PSDToLindblad2(
         basis_operators=basis_operators,
         sampling_freqs=omega_sample,
         psd_model=psd_model,  # Can be None for dynamic model selection
         T=T,
         sequence=sequence,
-        omega0=omega0,
-        g_energy_per_xi=g_energy_per_xi,
-        temperature_K=temperature_K,
+        omega0=omega0,  
         Gamma_h=Gamma_h
     )
 

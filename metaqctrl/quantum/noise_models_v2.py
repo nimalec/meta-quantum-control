@@ -26,7 +26,6 @@ from dataclasses import dataclass
 
 # ---------- constants ----------
 TWO_PI = 2.0 * np.pi
-HBAR = 1.054_571_817e-34  # J·s
 
 # ---------- noise parameters ----------
 @dataclass
@@ -170,19 +169,14 @@ class PSDToLindblad:
 
     Inputs:
       psd_model: returns two-sided angular PSD S(ω) with units [xi^2 * s]
-                 Can be None if using per-task model_type from NoiseParameters
-      g_energy_per_xi: coupling coefficient so that (g^2 S)/ħ^2 has units 1/s
-                       e.g., frequency noise δω with H_int = (ħ/2) δω σ_z → g = ħ/2
+                 Can be None if using per-task model_type from NoiseParameters 
 
     NEW: Supports dynamic model selection! If psd_model=None, creates model based on
          task_params.model_type for each call.
     """
 
-    def __init__(self, psd_model: "NoisePSDModel" = None, g_energy_per_xi: float = None):
-        self.psd_model = psd_model  # Can be None for dynamic model selection
-        self.gE = float(g_energy_per_xi) if g_energy_per_xi is not None else HBAR / 2.0  # [J / xi]
-        self.hbar = 1.054_571_817e-34 
-
+    def __init__(self, psd_model: "NoisePSDModel" = None):
+        self.psd_model = psd_model  # Can be None for dynamic model selection 
         # Cache for dynamically created PSD models
         self._model_cache = {}
 
@@ -244,13 +238,13 @@ class PSDToLindblad:
     def _lorentzian_L(w: np.ndarray, w0: float, Gamma_h: float) -> np.ndarray:
         """Normalized Lorentzian line shape centered at w0, FWHM=Gamma_h."""
         return (Gamma_h / 2.0) / np.pi / ((w - w0) ** 2 + (Gamma_h / 2.0) ** 2)
-
-    def relaxation_rates(self, theta: "NoiseParameters", omega0: float, Gamma_h: float = 0.0, span_factor: float = 50.0, n_w: int = 4001) -> Tuple[float, float]:
+    
+## True for thre Lorentzian noise source 
+    def relaxation_rates(self, theta: "NoiseParameters", omega0: float, Gamma_h: float = 1.0, span_factor: float = 50.0, n_w: int = 4001) -> Tuple[float, float]:
         """
         Γ↓, Γ↑ from S_eff at ω0:
           - If Gamma_h == 0:  S_eff = S(ω0)
           - Else:             S_eff = ∫ S(ω) L_Γ(ω-ω0) dω   (L_Γ normalized)
-        Γ↑ = e^{-β ħ ω0} Γ↓ if temperature_K provided; else Γ↑=Γ↓ (classical PSD).
         """
         psd_model = self._get_psd_model(theta)  # NEW: Dynamic model selection 
         if Gamma_h > 0.0:
@@ -269,8 +263,7 @@ class PSDToLindblad:
     # ----- assemble qubit jump operators -----
     def qubit_lindblad_ops(self, theta: "NoiseParameters", *,
                            T: float, sequence: str,
-                           omega0: float,
-                           temperature_K: float | None = None,
+                           omega0: float, 
                            Gamma_h: float = 0.0):
         """
         Returns:
@@ -282,24 +275,22 @@ class PSDToLindblad:
         L_phi = (1.0 / np.sqrt(2.0)) * np.array([[1, 0], [0, -1]], dtype=complex)
 
         # relaxation
-        Gamma_down = self.relaxation_rates(theta, omega0, temperature_K, Gamma_h)
-        L_minus = np.array([[0, 0], [1, 0]], dtype=complex)  # |g><e|
-        L_plus  = np.array([[0, 1], [0, 0]], dtype=complex)  # |e><g|
-
+        Gamma_down = self.relaxation_rates(theta, omega0, Gamma_h)
+        L_minus = np.array([[0, 1], [0, 0]], dtype=complex)  # |g><e|
+ 
         ops = [np.sqrt(Gamma_down) * L_minus,
                np.sqrt(gamma_phi)  * L_phi]
-        rates = np.array([Gamma_down, Gamma_up, gamma_phi], dtype=float)
+        rates = np.array([Gamma_down, gamma_phi], dtype=float)
         return ops, rates
 
     def get_effective_rates(self, theta: "NoiseParameters", *,
                             T: float, sequence: str,
                             omega0: float,
-                            temperature_K: float | None = None,
-                            Gamma_h: float = 0.0) -> Dict[str, float]:
+                            Gamma_h: float = 1.0) -> Dict[str, float]:
         """Convenience: return {'Gamma_down','Gamma_up','gamma_phi'} in 1/s."""
         gamma_phi = self.dephasing_rate(theta, T=T, sequence=sequence)
-        Gamma_down, Gamma_up = self.relaxation_rates(theta, omega0, temperature_K, Gamma_h)
-        return {"Gamma_down": Gamma_down, "Gamma_up": Gamma_up, "gamma_phi": gamma_phi}
+        Gamma_down = self.relaxation_rates(theta, omega0, Gamma_h)
+        return {"relax_rate": Gamma_down, "dephase_rate": gamma_phi}
 
 
 # ---------- task distribution ----------
@@ -359,7 +350,7 @@ class TaskDistribution:
             return self._sample_gaussian(n_tasks, rng)
         else:
             raise ValueError(f"Unknown distribution type '{self.dist_type}'")
-
+  
     def _sample_uniform(self, n: int, rng: np.random.Generator) -> List[NoiseParameters]:
         tasks: List[NoiseParameters] = []
         #amps = []  
@@ -442,7 +433,7 @@ if __name__ == "__main__":
     # 1) Task distribution over PSD params (keep your ranges)
     task_dist = TaskDistribution(
         dist_type="uniform",
-        ranges={"alpha": (0.1, 4.0), "A": (10, 1e5), "omega_c": (0, 80)}
+        ranges={"alpha": (0.1, 4.0), "A": (10, 1e5), "omega_c": (1, 100)}
     )
     rng = np.random.default_rng()
     tasks = task_dist.sample(10, rng)
@@ -454,23 +445,21 @@ if __name__ == "__main__":
     # 2) Pick a PSD model (no NV specifics)
     psd_model = NoisePSDModel(model_type="one_over_f")
 
-    # 3) Converter: choose coupling scale.
-    # Example: frequency noise δω(t) with H_int = (ħ/2) δω σ_z  ⇒ gE = ħ/2
-    converter = PSDToLindblad(psd_model, g_energy_per_xi=HBAR/2)
+    # 3) Converter: choose coupling scale.  
+    converter = PSDToLindblad(psd_model)
 
     # 4) Set qubit transition and experiment window (generic)
     omega0 = 2 * np.pi    
-    T = 1                  
-    sequence = "ramsey"        
-    temperature_K = None      
-    Gamma_h = 0.0               
+    T = 0.1                    
+    sequence = "ramsey"         
+    Gamma_h = 1e3             
 
     # 5) Build jump operators/rates for each sampled task
     for i, t in enumerate(tasks):
         ops, rates = converter.qubit_lindblad_ops(
-            t, T=T, sequence=sequence, omega0=omega0, temperature_K=temperature_K, Gamma_h=Gamma_h
+            t, T=T, sequence=sequence, omega0=omega0, Gamma_h=Gamma_h
         )
-        print(f"\nTask {i} rates [1/s]: Γ↓={rates[0]:.3e}, Γ↑={rates[1]:.3e}, γφ={rates[2]:.3e}")
+        print(f"\nTask {i} rates: Γ↓={rates[0]:.3e}, γφ={rates[1]:.3e}")
 
     # 6) (Optional) visualize PSDs
     try:

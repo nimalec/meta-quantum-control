@@ -13,8 +13,8 @@ import argparse
 
 from metaqctrl.quantum.lindblad import LindbladSimulator
 from metaqctrl.quantum.noise_adapter import (
-    TaskDistribution, NoisePSDModel, PSDToLindblad, NoiseParameters,
-    estimate_qubit_frequency_from_hamiltonian, get_coupling_for_noise_type
+    TaskDistribution, NoisePSDModel, PSDToLindblad2, NoiseParameters,
+    estimate_qubit_frequency_from_hamiltonian  
 )
 from metaqctrl.quantum.gates import GateFidelityComputer, TargetGates
 from metaqctrl.meta_rl.policy import PulsePolicy
@@ -50,24 +50,18 @@ def create_quantum_system(config: dict):
 
     # Get coupling for noise type
     noise_type = config.get('noise_type')
-    g_energy_per_xi =None 
-    if g_energy_per_xi is None:
-        g_energy_per_xi = get_coupling_for_noise_type(noise_type)
 
     sequence = config.get('sequence')
-    temperature_K = None 
-    Gamma_h = 0 
+    Gamma_h = 100    
 
     # PSD to Lindblad converter (uses v2 physics via adapter)
-    psd_to_lindblad = PSDToLindblad(
+    psd_to_lindblad = PSDToLindblad2(
         basis_operators=[sigma_x, sigma_y, sigma_z],
         sampling_freqs=omega_sample,
         psd_model=psd_model,
         T=T,
         sequence=sequence,
         omega0=omega0,
-        g_energy_per_xi=g_energy_per_xi,
-        temperature_K=temperature_K,
         Gamma_h=Gamma_h
     )
     
@@ -87,11 +81,11 @@ def create_task_distribution(config: dict):
     model_probs = config.get('model_probs')
 
     return TaskDistribution(
-        dist_type=config.get('task_dist_type', 'uniform'),
+        dist_type=config.get('task_dist_type'),
         ranges={
-            'alpha': tuple(config.get('alpha_range', [0.5, 2.0])),
-            'A': tuple(config.get('A_range', [0.001, 3])),
-            'omega_c': tuple(config.get('omega_c_range', [2.0, 8.0]))
+            'alpha': tuple(config.get('alpha_range')),
+            'A': tuple(config.get('A_range')),
+            'omega_c': tuple(config.get('omega_c_range'))
         },
         model_types=model_types,  # NEW: List of model types or None for single model
         model_probs=model_probs   # NEW: Probabilities for each model type
@@ -100,15 +94,7 @@ def create_task_distribution(config: dict):
 
 def task_sampler(n_tasks: int, split: str, task_dist: TaskDistribution, rng: np.random.Generator):
     ## Sample tasks 
-    """Sample tasks from distribution."""
-    # Different random seeds for train/val/test
-    if split == 'train':
-        seed_offset = 0
-    elif split == 'val':
-        seed_offset = 100000
-    else:  # test
-        seed_offset = 200000
-    
+    """Sample tasks from distribution."""  
     #local_rng = np.random.default_rng(rng.integers(0, 1000000) + seed_offset)
     local_rng = np.random.default_rng() 
     return task_dist.sample(n_tasks, local_rng)
@@ -148,7 +134,7 @@ def create_loss_function(env, device, config):
 
     # GPU-optimized settings from config
     dt = config.get('dt_training')  # Default to 0.01 if not specified
-    use_rk4 = config.get('use_rk4_training'  # Default to RK4 if not specified
+    use_rk4 = config.get('use_rk4_training')    # Default to RK4 if not specified
 
     def loss_fn(policy: torch.nn.Module, data: dict):
         ## define a loss function
@@ -189,7 +175,7 @@ def main(config_path: str):
     print("Meta-RL for Quantum Control - Training")
     print("=" * 70)
     print(f"Config: {config_path}\n")
-    
+
     # Set random seeds
     rng = np.random.default_rng()
     
@@ -200,6 +186,7 @@ def main(config_path: str):
     # Target gate (e.g., Hadamard)
     ## Establish target operation  --> trained to optimize a pauli-x operator  
     target_gate_name = config.get('target_gate') 
+  
     if target_gate_name == 'hadamard':
         U_target = TargetGates.hadamard()
     elif target_gate_name == 'pauli_x':
@@ -225,8 +212,8 @@ def main(config_path: str):
     # Create task distribution --> generate a new task distribution 
     print("\nCreating task distribution...")
     task_dist = create_task_distribution(config)
-    variance = task_dist.compute_variance()
-    print(f"  Task variance σ²_θ = {variance:.4f}\n")
+   # variance = task_dist.compute_variance()
+   # print(f"  Task variance σ²_θ = {variance:.4f}\n")
 
     
     # Create policy

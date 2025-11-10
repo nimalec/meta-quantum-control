@@ -12,6 +12,7 @@ task_dist_type: 'uniform'
 alpha_range: [0.1, 4.0]      # Spectral exponent range
 A_range: [1, 100000]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
 omega_c_range: [1, 100]    # Cutoff frequency range
+num_qubits: 1
 
 # Policy Network
 task_feature_dim: 3
@@ -40,11 +41,12 @@ val_tasks: 32
 #New parameters 
 drift_strength: 0.5 
 sequence: 'ramsey'
-model_types: 'model_types'
-model_probs: 'model_probs'
+model_types: ['one_over_f']
+model_probs: [1.0]
 dt_training: 0.01 
 use_rk4_training: True
 omega0: 6.28318530718 
+Gamma_h: 100 
  
 
 # Checkpointing
