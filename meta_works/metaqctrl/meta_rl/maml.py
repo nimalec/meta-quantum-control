@@ -81,46 +81,46 @@ class MAML:
         loss_fn: Callable,
         num_steps: Optional[int] = None
     ) -> Tuple[nn.Module, List[float]]:
-        """ Good
+        """ Good 
         Perform K-step inner loop adaptation on a single task.
-
+        
         Args:
             task_data: Dictionary with 'support' and 'query' data
             loss_fn: Loss function L(policy, data) → scalar
             num_steps: Number of gradient steps (defaults to self.inner_steps)
-
-        Returns:
+            
+        Returns: 
             adapted_policy: Policy after K adaptation steps
             losses: List of losses at each step
         """
-        ##Number of adaptation steps (K)
+        ##Number of adaptation steps (K) 
         num_steps = num_steps or self.inner_steps
-
+        
         # Clone policy for this task
-        ## Make policy
+        ## Make policy 
         adapted_policy = deepcopy(self.policy)
-        #Train the policy
+        #Train the policy 
         adapted_policy.train()
-
+        
         # Inner optimizer
         inner_optimizer = optim.SGD(adapted_policy.parameters(), lr=self.inner_lr)
-
+        
         losses = []
         support_data = task_data['support']
-        #Perform K steps
+        #Perform K steps 
         for step in range(num_steps):
-            #Clear gradients
+            #Clear gradients 
             inner_optimizer.zero_grad()
-
+            
             # Compute loss on support set
             loss = loss_fn(adapted_policy, support_data)
-            ##use this for plotting
+            ##use this for plotting 
             losses.append(loss.item())
-
+            
             # Gradient step
             loss.backward()
             inner_optimizer.step()
-
+        
         return adapted_policy, losses
     
     def inner_loop_higher(
@@ -129,7 +129,7 @@ class MAML:
         loss_fn: Callable,
         num_steps: Optional[int] = None
     ) -> Tuple:
-        """ Good
+        """ Good 
         Inner loop using `higher` library for differentiable optimization.
         This enables second-order MAML (backprop through inner loop).
 
