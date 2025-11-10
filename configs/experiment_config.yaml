@@ -15,7 +15,7 @@ omega_c_range: [1, 100]    # Cutoff frequency range
 num_qubits: 1
 
 # Policy Network
-task_feature_dim: 4  # FIXED: Changed from 3 to 4 to match include_model=True (alpha, A, omega_c, model_type)
+task_feature_dim: 3  # FIXED: Changed from 3 to 4 to match include_model=True (alpha, A, omega_c, model_type)
 hidden_dim: 256
 n_hidden_layers: 2
 n_segments: 100
