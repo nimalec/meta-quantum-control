@@ -1,0 +1,54 @@
+# Meta-RL for Quantum Control - Experiment Configuration
+
+# Random seed
+seed: 42
+
+# Quantum System
+psd_model: 'one_over_f'  # 'one_over_f', 'lorentzian', 'double_exp'
+horizon: 1.0  # Total evolution time (arbitrary units)
+target_gate: 'pauli_x'  # 'hadamard', 'pauli_x', 'pauli_y'
+
+# Task Distribution
+task_dist_type: 'uniform'
+
+alpha_range: [0.5, 2.0]      # Spectral exponent range
+A_range: [0.001, 1]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
+omega_c_range: [1000, 100000]    # Cutoff frequency range
+
+
+# Policy Network
+task_feature_dim: 3
+hidden_dim: 256
+n_hidden_layers: 2
+n_segments: 100
+n_controls: 2
+output_scale: 2.0  # FIXED: Increased from 1.0 to allow stronger control signals for better gate fidelity
+activation: 'tanh'
+
+# MAML Hyperparameters
+inner_lr: 0.01  # FIXED: Further reduced from 0.005 for stable gradients with differentiable simulator
+inner_steps: 5   # FIXED: Increased from 3 to allow sufficient adaptation (meta-learning needs this!)
+meta_lr: 0.001
+first_order: true  # FIXED: Use FOMAML initially to avoid complex eigenvalue gradient issues
+
+# Training
+n_iterations: 55
+tasks_per_batch: 32  # FIXED: Increased from 4 for more stable meta-gradient estimates
+n_support: 8
+n_query: 8
+log_interval: 2
+val_interval: 2
+val_tasks: 32
+
+# Checkpointing
+save_dir: 'checkpoints'
+
+# Robust Baseline (for comparison)
+robust_type: 'minimax'  # 'average', 'minimax', 'cvar'
+robust_iterations: 20
+robust_tasks_per_batch: 16
+
+# Optimality Gap Experiments
+gap_n_samples: 100
+gap_K_values: [1, 3, 5, 10, 20]
+gap_variance_range: [0.01, 0.05, 0.1, 0.2, 0.5]

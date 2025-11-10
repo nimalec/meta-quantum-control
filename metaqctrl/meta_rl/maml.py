@@ -19,7 +19,9 @@ try:
 except ImportError:
     HIGHER_AVAILABLE = False
     higher = None
-
+    
+HIGHER_AVAILABLE = False
+higher = None
 
 class MAML:
     """

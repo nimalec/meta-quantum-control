@@ -1,0 +1,7 @@
+*.egg-info
+__pycache__
+.idea
+*.png
+*.pdf
+checkpoints
+.DS_Store 
