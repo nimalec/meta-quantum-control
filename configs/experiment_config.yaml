@@ -27,7 +27,7 @@ activation: 'tanh'
 inner_lr: 0.01  # FIXED: Further reduced from 0.005 for stable gradients with differentiable simulator
 inner_steps: 5   # FIXED: Increased from 3 to allow sufficient adaptation (meta-learning needs this!)
 meta_lr: 0.001
-first_order: false # FIXED: Use FOMAML initially to avoid complex eigenvalue gradient issues
+first_order: true  # FIXED: Use FOMAML (First-Order MAML) to avoid gradient issues with complex quantum simulation
 
 # Training
 n_iterations: 55

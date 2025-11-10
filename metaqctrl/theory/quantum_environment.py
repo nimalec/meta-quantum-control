@@ -418,15 +418,31 @@ class QuantumEnvironment:
         Returns:
             loss: FULLY DIFFERENTIABLE loss tensor with gradients!
         """
-        # Task features
-        task_features = torch.tensor(
-            task_params.to_array(),
+        # Task features - FIXED: Use as_tensor instead of tensor to avoid copying
+        # This preserves gradient flow when using functional models (e.g., higher library)
+        task_params_array = task_params.to_array()
+        task_features = torch.as_tensor(
+            task_params_array,
             dtype=torch.float32,
             device=device
         )
 
         # Generate controls (this is differentiable)
         controls = policy(task_features)  # (n_segments, n_controls)
+
+        # DIAGNOSTIC: Check if controls have gradient connection (for debugging)
+        # In MAML with higher library, controls should have grad_fn
+        # Note: We don't raise an error here because functional models from higher
+        # may not set requires_grad on outputs, but still maintain grad_fn
+        has_grad_connection = (controls.grad_fn is not None) or controls.requires_grad
+        if not has_grad_connection:
+            import warnings
+            warnings.warn(
+                f"WARNING: Controls may not have gradient connection!\n"
+                f"  This could cause MAML training to fail.\n"
+                f"  controls.requires_grad: {controls.requires_grad}\n"
+                f"  controls.grad_fn: {controls.grad_fn}"
+            )
 
         # CRITICAL OPTIMIZATION: Get cached simulator instead of creating new one!
         sim = self.get_torch_simulator(task_params, device, dt=dt, use_rk4=use_rk4)

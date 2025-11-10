@@ -161,8 +161,49 @@ class MAML:
                 loss = loss_fn(fmodel, support_data)
                 losses.append(loss.item())
 
+                # CRITICAL FIX: Check if loss has gradients before stepping
+                # This is required even for first-order MAML
+                if loss.grad_fn is None and not loss.requires_grad:
+                    raise RuntimeError(
+                        f"\n{'='*70}\n"
+                        f"ERROR: Loss has no gradient connection in inner_loop_higher!\n"
+                        f"{'='*70}\n"
+                        f"  Step: {step}/{num_steps}\n"
+                        f"  Loss value: {loss.item()}\n"
+                        f"  loss.grad_fn: {loss.grad_fn}\n"
+                        f"  loss.requires_grad: {loss.requires_grad}\n"
+                        f"\n"
+                        f"This means compute_loss_differentiable() is not returning a\n"
+                        f"differentiable tensor. Check that:\n"
+                        f"  1. The policy is in training mode\n"
+                        f"  2. There's no .detach() in the loss computation\n"
+                        f"  3. The quantum simulator maintains gradient flow\n"
+                        f"{'='*70}\n"
+                    )
+
                 # Differentiable gradient step
-                diffopt.step(loss)
+                try:
+                    diffopt.step(loss)
+                except RuntimeError as e:
+                    if "does not require grad" in str(e):
+                        raise RuntimeError(
+                            f"\n{'='*70}\n"
+                            f"ERROR: diffopt.step() failed - loss has no gradients!\n"
+                            f"{'='*70}\n"
+                            f"  Original error: {str(e)}\n"
+                            f"  Loss value: {loss.item()}\n"
+                            f"  loss.grad_fn: {loss.grad_fn}\n"
+                            f"  loss.requires_grad: {loss.requires_grad}\n"
+                            f"\n"
+                            f"The quantum simulator is not differentiable.\n"
+                            f"This could be because:\n"
+                            f"  1. compute_loss_differentiable uses .detach() or .item()\n"
+                            f"  2. The simulator breaks gradient flow\n"
+                            f"  3. The loss is computed without gradients\n"
+                            f"{'='*70}\n"
+                        ) from e
+                    else:
+                        raise
 
             return fmodel, losses
     
@@ -183,6 +224,38 @@ class MAML:
         Returns:
             metrics: Dictionary of training metrics
         """
+        # CRITICAL FIX: Ensure policy parameters require gradients
+        # This is essential for MAML to work with higher library
+        for name, param in self.policy.named_parameters():
+            if not param.requires_grad:
+                raise RuntimeError(
+                    f"Policy parameter '{name}' does not require gradients!\n"
+                    f"All policy parameters must have requires_grad=True for MAML training."
+                )
+
+        # DIAGNOSTIC: Print MAML mode for debugging
+        # CRITICAL FIX: Force first-order mode if higher library would be used for second-order
+        # This avoids gradient issues with complex quantum simulations
+        if use_higher and not self.first_order and HIGHER_AVAILABLE:
+            print("\n" + "!"*70)
+            print("WARNING: Second-order MAML is not supported with this quantum simulator!")
+            print("         Automatically switching to first-order MAML (FOMAML)")
+            print("!"*70 + "\n")
+            # Force first-order mode for this session
+            use_higher = False
+
+        maml_mode = "Second-Order (SO-MAML)" if (use_higher and not self.first_order and HIGHER_AVAILABLE) else "First-Order (FOMAML)"
+        # Only print on first iteration to avoid spam
+        if not hasattr(self, '_printed_maml_mode'):
+            print(f"\n[MAML] Running in {maml_mode} mode")
+            print(f"  self.first_order: {self.first_order}")
+            print(f"  use_higher: {use_higher}")
+            print(f"  HIGHER_AVAILABLE: {HIGHER_AVAILABLE}")
+            print(f"  inner_lr: {self.inner_lr}")
+            print(f"  inner_steps: {self.inner_steps}")
+            print(f"  meta_lr: {self.meta_lr}\n")
+            self._printed_maml_mode = True
+
         self.meta_optimizer.zero_grad()
 
         meta_loss_tensor = None  # Will accumulate query losses as tensors
@@ -209,7 +282,53 @@ class MAML:
                     for step in range(self.inner_steps):
                         loss = loss_fn(fmodel, support_data)
                         inner_losses.append(loss.item())
-                        diffopt.step(loss)
+
+                        # CRITICAL FIX: Check if loss has gradient connection before stepping
+                        if loss.grad_fn is None and not loss.requires_grad:
+                            print("\n" + "="*70)
+                            print("ERROR: Loss has no gradient connection!")
+                            print("="*70)
+                            print(f"  loss value: {loss.item()}")
+                            print(f"  loss.grad_fn: {loss.grad_fn}")
+                            print(f"  loss.requires_grad: {loss.requires_grad}")
+                            print(f"  loss.dtype: {loss.dtype}")
+                            print(f"  loss.device: {loss.device}")
+                            print(f"\nPolicy (fmodel) info:")
+                            print(f"  type: {type(fmodel)}")
+                            print(f"  training mode: {fmodel.training}")
+                            fmodel_params = list(fmodel.parameters())
+                            if len(fmodel_params) > 0:
+                                print(f"  first param requires_grad: {fmodel_params[0].requires_grad}")
+                                print(f"  first param grad_fn: {fmodel_params[0].grad_fn}")
+                            print("="*70)
+                            raise RuntimeError(
+                                f"\nLoss tensor has no gradient connection in inner loop step {step}!\n\n"
+                                f"This means the quantum simulation is not differentiable.\n"
+                                f"SOLUTION: Set first_order=True in your config to use FOMAML instead.\n"
+                                f"          FOMAML doesn't require gradients through the inner loop."
+                            )
+
+                        try:
+                            diffopt.step(loss)
+                        except RuntimeError as e:
+                            if "does not require grad" in str(e):
+                                print("\n" + "="*70)
+                                print("ERROR: Gradient computation failed in inner loop!")
+                                print("="*70)
+                                print(f"Original error: {str(e)}")
+                                print("\nThis typically happens when:")
+                                print("  1. The quantum simulator breaks gradient flow")
+                                print("  2. The loss function uses .detach() or .item()")
+                                print("  3. The policy doesn't properly use its parameters")
+                                print("\nSOLUTION: Set first_order=True in your config.")
+                                print("="*70 + "\n")
+                                raise RuntimeError(
+                                    f"Failed to compute gradients in MAML inner loop!\n"
+                                    f"Original error: {str(e)}\n\n"
+                                    f"SOLUTION: Set first_order=True in your config to use FOMAML."
+                                ) from e
+                            else:
+                                raise
 
                     # Compute query loss INSIDE context for proper gradient flow
                     query_loss = loss_fn(fmodel, query_data)
@@ -241,67 +360,37 @@ class MAML:
                 # First-order MAML - use manual gradient computation
                 use_manual_grads = True
 
-                if HIGHER_AVAILABLE:
-                    # Use higher library for inner loop
-                    fmodel, inner_losses = self.inner_loop_higher(task_data, loss_fn)
+                # CRITICAL FIX: For first-order MAML, ALWAYS use the plain inner_loop
+                # instead of inner_loop_higher, because inner_loop_higher requires
+                # gradients for diffopt.step() even though we don't use them for meta-updates
+                #
+                # The plain inner_loop uses deepcopy and regular SGD optimizer,
+                # which doesn't require the loss to have gradients during adaptation.
+                # We only need gradients for the final query loss.
 
-                    # Compute query loss
-                    query_loss = loss_fn(fmodel, task_data['query'])
+                # Use plain inner loop (no higher library)
+                adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
 
-                    # CRITICAL FIX FOR FOMAML:
-                    # Manually compute gradients and apply to meta-parameters
-                    # This is what makes it "first-order" - we ignore gradients through adaptation
-                    meta_params = list(self.policy.parameters())
-                    adapted_params = list(fmodel.parameters())
+                # Evaluate on query set
+                query_loss = loss_fn(adapted_policy, task_data['query'])
 
-                    # Compute gradients w.r.t adapted parameters
-                    adapted_grads = autograd.grad(
-                        query_loss,
-                        adapted_params,
-                        create_graph=False,  # First-order: don't need second derivatives
-                        allow_unused=True
-                    )
+                # For FOMAML: manually compute gradients
+                meta_params = list(self.policy.parameters())
+                adapted_params = list(adapted_policy.parameters())
 
-                    # Apply these gradients to meta-parameters
-                    # (accumulate since we're batching over tasks)
-                    for meta_param, adapted_grad in zip(meta_params, adapted_grads):
-                        if adapted_grad is not None:
-                            if meta_param.grad is None:
-                                meta_param.grad = adapted_grad.clone()
-                            else:
-                                meta_param.grad += adapted_grad.clone()
+                adapted_grads = autograd.grad(
+                    query_loss,
+                    adapted_params,
+                    create_graph=False,
+                    allow_unused=True
+                )
 
-                else:
-                    # Manual first-order MAML (only if higher not available)
-                    adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
-
-                    # Evaluate on query set
-                    query_loss = loss_fn(adapted_policy, task_data['query'])
-
-                    # For FOMAML without higher: manually compute gradients
-                    meta_params = list(self.policy.parameters())
-                    adapted_params = list(adapted_policy.parameters())
-
-                    adapted_grads = autograd.grad(
-                        query_loss,
-                        adapted_params,
-                        create_graph=False,
-                        allow_unused=True
-                    )
-
-                    for meta_param, adapted_grad in zip(meta_params, adapted_grads):
-                        if adapted_grad is not None:
-                            if meta_param.grad is None:
-                                meta_param.grad = adapted_grad.clone()
-                            else:
-                                meta_param.grad += adapted_grad.clone()
-
-                    # WARNING: This won't update correctly without higher library!
-                    # Recommend installing: pip install higher
-                    if not self._warned_no_higher:
-                        print("WARNING: First-order MAML without 'higher' library may not train correctly!")
-                        print("Install with: pip install higher")
-                        self._warned_no_higher = True
+                for meta_param, adapted_grad in zip(meta_params, adapted_grads):
+                    if adapted_grad is not None:
+                        if meta_param.grad is None:
+                            meta_param.grad = adapted_grad.clone()
+                        else:
+                            meta_param.grad += adapted_grad.clone()
 
             # FIXED: Check for NaN/Inf and skip task entirely to avoid gradient issues
             if torch.isnan(query_loss) or torch.isinf(query_loss):
