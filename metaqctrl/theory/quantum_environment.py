@@ -305,19 +305,19 @@ class QuantumEnvironment:
         task_params: NoiseParameters,
         device: torch.device = torch.device('cpu')
     ) -> float:
-        """ Good. 
+        """ Good.
         Evaluate policy on task.
-        
+
         Args:
             policy: Policy network
             task_params: Task parameters
             device: torch device
-            
+
         Returns:
             fidelity: Achieved fidelity
         """
         policy.eval()
-        
+
         with torch.no_grad():
             # Task features
             task_features = torch.tensor(
@@ -325,14 +325,14 @@ class QuantumEnvironment:
                 dtype=torch.float32,
                 device=device
             )
-            
+
             # Generate controls
             controls = policy(task_features)
             controls_np = controls.cpu().numpy()
-        
+
         # Evaluate
         fidelity = self.evaluate_controls(controls_np, task_params)
-        
+
         return fidelity
     
     def compute_loss(
@@ -341,7 +341,7 @@ class QuantumEnvironment:
         task_params: NoiseParameters,
         device: torch.device = torch.device('cpu')
     ) -> torch.Tensor:
-        """ Take a look ==> which function is replacing it. 
+        """ Take a look ==> which function is replacing it.
         Compute loss (infidelity) with gradient support.
 
         WARNING: This implementation is NOT fully differentiable because the quantum

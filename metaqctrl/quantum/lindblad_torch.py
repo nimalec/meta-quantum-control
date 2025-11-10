@@ -85,9 +85,9 @@ class DifferentiableLindbladSimulator(nn.Module):
         u = torch.clamp(u, -self.max_control_amp, self.max_control_amp)
 
         # Build total Hamiltonian: H_total = H₀ + Σₖ uₖ Hₖ
-        H_total = self.H0.clone()
-        for k, u_k in enumerate(u):
-            H_total = H_total + u_k * self.H_controls[k]
+        # FIXED: Build H_total without clone() to maintain gradient flow
+        # Start with H0 and add control terms
+        H_total = self.H0 + sum(u_k * H_k for u_k, H_k in zip(u, self.H_controls))
 
         # Hamiltonian evolution: -i[H, ρ]
         hamiltonian_term = -1j * (H_total @ rho - rho @ H_total)

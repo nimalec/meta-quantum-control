@@ -257,9 +257,9 @@ def main(config_path: str):
     # Modified data generator to work with environment
     def data_generator_env(task_params, n_trajectories, split):
         """Generate data compatible with environment."""
-        # NEW: Include model type in features (4D instead of 3D)
+        # Task features: 3D [alpha, A, omega_c] to match config task_feature_dim=3
         task_features = torch.tensor(
-            task_params.to_array(include_model=True),  # 4D: [alpha, A, omega_c, model_encoding]
+            task_params.to_array(),  # 3D: [alpha, A, omega_c]
             dtype=torch.float32,
             device=device
         )
