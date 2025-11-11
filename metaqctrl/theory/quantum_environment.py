@@ -12,6 +12,7 @@ from functools import lru_cache
 from metaqctrl.quantum.lindblad import LindbladSimulator
 from metaqctrl.quantum.lindblad_torch import DifferentiableLindbladSimulator, numpy_to_torch_complex  
 from metaqctrl.quantum.noise_adapter import NoiseParameters
+from metaqctrl.quantum.noise_models_v2 import *  
 from metaqctrl.quantum.gates import state_fidelity
 
 
@@ -31,7 +32,7 @@ class QuantumEnvironment:
         H_controls: list,
         psd_to_lindblad,
         target_state: np.ndarray,
-        T: float = 0.1,
+        T: float = 1,
         method: str = 'RK45',
         target_unitary: np.ndarray = None
     ):
@@ -54,6 +55,7 @@ class QuantumEnvironment:
         self.method = method
         self.sequence = None  
         self.omega0 = None 
+
 
         # System dimensions
         self.d = H0.shape[0]
@@ -88,6 +90,7 @@ class QuantumEnvironment:
     @property
     def omega_control(self) -> np.ndarray:
         """Control frequencies - placeholder for compatibility."""
+        ## Change this 
         # Return typical control frequencies based on system
         return np.array([1.0, 5.0, 10.0])
 
@@ -107,6 +110,7 @@ class QuantumEnvironment:
             round(task_params.alpha, 6),
             round(task_params.A, 6),
             round(task_params.omega_c, 6),
+            #Consider removing this line.  
             task_params.model_type  # NEW: Include model type in hash
         )
     
@@ -127,6 +131,7 @@ class QuantumEnvironment:
             L_ops = self.psd_to_lindblad.get_lindblad_operators(task_params)
             self._L_cache[key] = L_ops
 
+
         return self._L_cache[key]
     
     def get_simulator(self, task_params: NoiseParameters) -> LindbladSimulator:
@@ -141,8 +146,10 @@ class QuantumEnvironment:
         """
         key = self._task_hash(task_params)
 
+
         if key not in self._sim_cache:
             L_ops = self.get_lindblad_operators(task_params)
+         
 
             sim = LindbladSimulator(
                 H0=self.H0,
@@ -183,12 +190,14 @@ class QuantumEnvironment:
         if key not in self._torch_sim_cache:
             # Get Lindblad operators
             L_ops_numpy = self.psd_to_lindblad.get_lindblad_operators(task_params)
+            print("🚀", L_ops_numpy)
 
             # Convert system to PyTorch tensors
             H0_torch = numpy_to_torch_complex(self.H0, device)
             H_controls_torch = [numpy_to_torch_complex(H, device) for H in self.H_controls]
             L_ops_torch = [numpy_to_torch_complex(L, device) for L in L_ops_numpy]
 
+          
             # Create differentiable simulator
             sim = DifferentiableLindbladSimulator(
                 H0=H0_torch,
@@ -420,6 +429,7 @@ class QuantumEnvironment:
         """
         # Task features - FIXED: Use as_tensor instead of tensor to avoid copying
         # This preserves gradient flow when using functional models (e.g., higher library)
+
         task_params_array = task_params.to_array()
         task_features = torch.as_tensor(
             task_params_array,
@@ -430,24 +440,10 @@ class QuantumEnvironment:
         # Generate controls (this is differentiable)
         controls = policy(task_features)  # (n_segments, n_controls)
 
-        # DIAGNOSTIC: Check if controls have gradient connection (for debugging)
-        # In MAML with higher library, controls should have grad_fn
-        # Note: We don't raise an error here because functional models from higher
-        # may not set requires_grad on outputs, but still maintain grad_fn
-        has_grad_connection = (controls.grad_fn is not None) or controls.requires_grad
-        if not has_grad_connection:
-            print(f"\nWARNING [compute_loss_differentiable]: Controls have NO gradient connection!")
-            print(f"  controls.requires_grad: {controls.requires_grad}")
-            print(f"  controls.grad_fn: {controls.grad_fn}")
-            print(f"  task_features.requires_grad: {task_features.requires_grad}")
-            print(f"  task_features.grad_fn: {task_features.grad_fn}")
-            # Check policy parameters
-            policy_params_have_grad = any(p.requires_grad for p in policy.parameters())
-            print(f"  policy has parameters with requires_grad: {policy_params_have_grad}")
-            print(f"  policy training mode: {policy.training}")
 
         # CRITICAL OPTIMIZATION: Get cached simulator instead of creating new one!
         sim = self.get_torch_simulator(task_params, device, dt=dt, use_rk4=use_rk4)
+        
 
         # Initial state |0⟩
         rho0 = torch.zeros((self.d, self.d), dtype=torch.complex64, device=device)
@@ -647,6 +643,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
         sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
         sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
         sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
+        sigma_p = np.array([[0, 1], [0, 0]], dtype=complex)
 
         # System Hamiltonians
         # FIXED: Use small non-zero drift for better dynamics
@@ -655,7 +652,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
         H_controls = [sigma_x, sigma_y]
 
         # Noise basis operators
-        basis_operators = [sigma_x, sigma_y, sigma_z]
+        basis_operators = [sigma_p, sigma_z]
 
     elif num_qubits == 2:
         # 2-qubit system (NEW)
@@ -689,17 +686,19 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
     model_types = config.get('model_types')
     if model_types is None:
         # Single model mode (backward compatibility)
-        psd_model = NoisePSDModel(model_type=config.get('psd_model'))
+        ## Look at how this is implemented 
+        psd_model = NoisePSDModel(model_type=config.get('psd_model')) 
     else:
         # Mixed model mode - use dynamic selection
-        psd_model = None
+        ## Think about fixing this...  
+        psd_model = None 
         print(f"INFO: Mixed model mode enabled with models: {model_types}")
 
     # Sampling frequencies (control bandwidth)
-    n_segments = config.get('n_segments', 20)
-    T = config.get('horizon', 1.0)
+    n_segments = config.get('n_segments')
+    T = config.get('horizon')
     omega_max = n_segments / T
-    omega_sample = np.linspace(0, omega_max, 10)
+    omega_sample = np.linspace(0, omega_max, 1000)
 
     # Physics parameters for v2 (with sensible defaults)
     # Estimate qubit frequency from Hamiltonian if not provided
@@ -709,16 +708,17 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
 
     # Get coupling constant for noise type
     noise_type = config.get('noise_type')  # 'frequency', 'magnetic', 'charge', 'amplitude'
-
-
+ 
     # Pulse sequence for dephasing filter function
     sequence = config.get('sequence')  # 'ramsey', 'echo', 'cpmg_n'
 
     # Homogeneous broadening (rad/s)
     Gamma_h = config.get('Gamma_h')
-
-
+ 
     # PSD to Lindblad converter (uses v2 physics via adapter)
+   ## Look at how this is implemented  
+    print("model!", psd_model)
+    
     psd_to_lindblad = PSDToLindblad2(
         basis_operators=basis_operators,
         sampling_freqs=omega_sample,
@@ -728,8 +728,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
         omega0=omega0,  
         Gamma_h=Gamma_h
     )
-
-
+ 
     # Create environment
     env = QuantumEnvironment(
         H0=H0,
@@ -737,7 +736,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
         psd_to_lindblad=psd_to_lindblad,
         target_state=target_state,
         T=T,
-        method=config.get('integration_method', 'RK45'),
+        method=config.get('integration_method'),
         target_unitary=target_unitary
     )
 

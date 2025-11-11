@@ -287,9 +287,9 @@ if __name__ == "__main__":
     H_controls = [sigma_x, sigma_y]  # Control Hamiltonians
     
     # Example Lindblad operator (dephasing)
-    T_op = 0.1 
-    gamma_1 = 10          
-    gamma_2 = 100        
+    T_op = 1 
+    gamma_1 = 30         
+    gamma_2 = 50        
    # L_ops = [np.sqrt(gamma) * sigma_z]
     L_ops = [np.sqrt(gamma_1) * sig_p, np.sqrt(gamma_2) * sigma_z ]
     
@@ -300,7 +300,7 @@ if __name__ == "__main__":
     
     # Random control sequence
     n_segments = 20  
-    controls = np.ones((n_segments, 2))  
+    controls = np.ones((n_segments, 2))*20  
     
     rho_final, traj = sim.evolve(rho0, controls, T=T_op)
     

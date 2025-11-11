@@ -20,9 +20,6 @@ except ImportError:
     HIGHER_AVAILABLE = False
     higher = None
     
-HIGHER_AVAILABLE = False
-higher = None
-
 class MAML:
     """
     MAML algorithm for meta-learning quantum control policies.
@@ -100,12 +97,17 @@ class MAML:
 
         # Clone policy for this task
         ## Make policy
-        adapted_policy = deepcopy(self.policy)
+        #adapted_policy = deepcopy(self.policy)
+        adapted_policy = self.policy 
+         
+        
+
         #Train the policy
         adapted_policy.train()
 
         # Inner optimizer
         inner_optimizer = optim.SGD(adapted_policy.parameters(), lr=self.inner_lr)
+        
 
         losses = []
         support_data = task_data['support']
@@ -143,12 +145,15 @@ class MAML:
             raise ImportError("The 'higher' library is required for second-order MAML. "
                             "Install with: pip install higher")
 
+
+
+
         num_steps = num_steps or self.inner_steps
 
         support_data = task_data['support']
+     
         losses = []
-
-        # Create differentiable optimizer context
+            
         inner_opt = optim.SGD(self.policy.parameters(), lr=self.inner_lr)
 
         with higher.innerloop_ctx(
@@ -161,9 +166,10 @@ class MAML:
             for step in range(num_steps):
                 # Forward pass with functional model
                 loss = loss_fn(fmodel, support_data)
-                losses.append(loss.item())
-
+        
+                losses.append(loss.item()) 
                 # Differentiable gradient step
+
                 diffopt.step(loss)
 
             return fmodel, losses
@@ -175,7 +181,7 @@ class MAML:
         use_higher: bool = True
     ) -> Dict[str, float]:
         """IMPROVED: Added NaN/Inf checks for numerical stability.
-        Single meta-training step on a batch of tasks.
+        Single meta-training step on a batch of tasks.deep
 
         Args:
             task_batch: List of task dictionaries, each with 'support' and 'query'

@@ -21,58 +21,6 @@ from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.meta_rl.maml import MAML, MAMLTrainer
 
 
-def create_quantum_system(config: dict):
-    ## create a 1 qubit simulator ==> 
-    """Create quantum system simulator."""
-    # Pauli matrices for 1-qubit
-    sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
-    sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
-    sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
-    
-    # System Hamiltonians ==> initialize Hamiltonian
-    drift_strength = config.get('drift_strength')
-    H0 = drift_strength * sigma_z  # Drift (small non-zero for better dynamics)
-    H_controls = [sigma_x, sigma_y]  # Control Hamiltonians
-
-    # PSD model ==> define a PSD noise model
-    psd_model = NoisePSDModel(model_type=config.get('psd_model'))
-
-    # Sampling frequencies ==> define sample frequencies across control bandwidth
-    omega_sample = np.linspace(1, 1e5, 1000)
-
-    # Physics parameters for v2 (with sensible defaults)
-    T = config.get('horizon')  # Gate time
-
-    # Estimate qubit frequency from Hamiltonian
-    omega0 = config.get('omega0')
-    if omega0 is None:
-        omega0 = estimate_qubit_frequency_from_hamiltonian(H0)
-
-    # Get coupling for noise type
-    noise_type = config.get('noise_type')
-
-    sequence = config.get('sequence')
-    Gamma_h = 100    
-
-    # PSD to Lindblad converter (uses v2 physics via adapter)
-    psd_to_lindblad = PSDToLindblad2(
-        basis_operators=[sigma_x, sigma_y, sigma_z],
-        sampling_freqs=omega_sample,
-        psd_model=psd_model,
-        T=T,
-        sequence=sequence,
-        omega0=omega0,
-        Gamma_h=Gamma_h
-    )
-    
-    return {
-        'H0': H0,
-        'H_controls': H_controls,
-        'psd_to_lindblad': psd_to_lindblad,
-        'psd_model': psd_model
-    }
-
-
 def create_task_distribution(config: dict):
     ## Create a distribution of tasks , generating P
     """Create task distribution P (with optional mixed model support)."""
@@ -95,6 +43,13 @@ def create_task_distribution(config: dict):
 def task_sampler(n_tasks: int, split: str, task_dist: TaskDistribution, rng: np.random.Generator):
     ## Sample tasks 
     """Sample tasks from distribution."""  
+
+    if split == 'train':
+        seed_offset = 0
+    elif split == 'val':
+        seed_offset = 100000
+    else:  # test
+        seed_offset = 200000
     #local_rng = np.random.default_rng(rng.integers(0, 1000000) + seed_offset)
     local_rng = np.random.default_rng() 
     return task_dist.sample(n_tasks, local_rng)
@@ -113,7 +68,8 @@ def data_generator(
     # Just return task features - actual simulation happens in loss function
     # NEW: Include model type in features (4D instead of 3D)
     task_features = torch.tensor(
-        task_params.to_array(include_model=True),  # 4D: [alpha, A, omega_c, model_encoding]
+        #task_params.to_array(include_model=True),  # 4D: [alpha, A, omega_c, model_encoding]
+        task_params.to_array(), 
         dtype=torch.float32,
         device=device
     )
@@ -136,6 +92,7 @@ def create_loss_function(env, device, config):
     dt = config.get('dt_training')  # Default to 0.01 if not specified
     use_rk4 = config.get('use_rk4_training')    # Default to RK4 if not specified
 
+
     def loss_fn(policy: torch.nn.Module, data: dict):
         ## define a loss function
         """
@@ -149,8 +106,8 @@ def create_loss_function(env, device, config):
             loss: Scalar tensor
         """
         task_params = data['task_params']
-
-        # compute differentiable loss with GPU-optimized settings
+ 
+        # compute differentiable loss with GPU-optimized settings 
         loss = env.compute_loss_differentiable(
             policy,
             task_params,
@@ -206,14 +163,16 @@ def main(config_path: str):
     from metaqctrl.theory.quantum_environment import create_quantum_environment
     ## Make a quantum enviroment
     ## Establish quantum enviroment  
+    
     env = create_quantum_environment(config, target_state)
     print(f"  Environment created: {env.get_cache_stats()}")
     
     # Create task distribution --> generate a new task distribution 
     print("\nCreating task distribution...")
     task_dist = create_task_distribution(config)
-   # variance = task_dist.compute_variance()
-   # print(f"  Task variance σ²_θ = {variance:.4f}\n")
+    
+    #variance = task_dist.compute_variance()
+  #  print(f"  Task variance σ²_θ = {variance:.4f}\n")
 
     
     # Create policy

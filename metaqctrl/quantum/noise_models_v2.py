@@ -195,7 +195,7 @@ class PSDToLindblad:
             return self.psd_model
 
         # Dynamic model selection based on task
-        model_type = theta.model_type
+        model_type = theta.model_type  
         if model_type not in self._model_cache:
             self._model_cache[model_type] = NoisePSDModel(model_type=model_type)
 
@@ -239,7 +239,6 @@ class PSDToLindblad:
         """Normalized Lorentzian line shape centered at w0, FWHM=Gamma_h."""
         return (Gamma_h / 2.0) / np.pi / ((w - w0) ** 2 + (Gamma_h / 2.0) ** 2)
     
-## True for thre Lorentzian noise source 
     def relaxation_rates(self, theta: "NoiseParameters", omega0: float, Gamma_h: float = 1.0, span_factor: float = 50.0, n_w: int = 4001) -> Tuple[float, float]:
         """
         Γ↓, Γ↑ from S_eff at ω0:
@@ -361,6 +360,7 @@ class TaskDistribution:
 
             # NEW: Sample model type
             model_type = rng.choice(self.model_types, p=self.model_probs) 
+
             tasks.append(NoiseParameters(
                 alpha,
                 A,
@@ -433,10 +433,10 @@ if __name__ == "__main__":
     # 1) Task distribution over PSD params (keep your ranges)
     task_dist = TaskDistribution(
         dist_type="uniform",
-        ranges={"alpha": (0.1, 4.0), "A": (10, 1e5), "omega_c": (1, 100)}
+        ranges={"alpha": (0.1, 4.0), "A": (0.01, 1e3), "omega_c": (1, 100)}
     )
     rng = np.random.default_rng()
-    tasks = task_dist.sample(10, rng)
+    tasks = task_dist.sample(5, rng)
 
     print("Sampled tasks:")
     for i, t in enumerate(tasks):
@@ -444,15 +444,17 @@ if __name__ == "__main__":
 
     # 2) Pick a PSD model (no NV specifics)
     psd_model = NoisePSDModel(model_type="one_over_f")
+    
+
 
     # 3) Converter: choose coupling scale.  
     converter = PSDToLindblad(psd_model)
 
     # 4) Set qubit transition and experiment window (generic)
-    omega0 = 2 * np.pi    
-    T = 0.1                    
+    omega0 = 1   
+    T = 1                    
     sequence = "ramsey"         
-    Gamma_h = 1e3             
+    Gamma_h = 100               
 
     # 5) Build jump operators/rates for each sampled task
     for i, t in enumerate(tasks):
