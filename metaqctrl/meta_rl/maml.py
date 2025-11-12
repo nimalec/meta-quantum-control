@@ -199,8 +199,8 @@ class MAML:
 
         for task_data in task_batch:
             if use_higher and not self.first_order and HIGHER_AVAILABLE:
-                # Second-order MAML with higher library
-                # CRITICAL: Must compute query loss INSIDE the higher context
+                # ===== SECOND-ORDER MAML with higher library =====
+                # This computes gradients through the inner loop optimization
                 support_data = task_data['support']
                 query_data = task_data['query']
 
@@ -213,7 +213,7 @@ class MAML:
                     copy_initial_weights=True,
                     track_higher_grads=True  # Enable gradient tracking for second-order
                 ) as (fmodel, diffopt):
-                    # Inner loop adaptation
+                    # Inner loop adaptation on support set
                     for step in range(self.inner_steps):
                         loss = loss_fn(fmodel, support_data)
                         inner_losses.append(loss.item())
@@ -222,28 +222,26 @@ class MAML:
                     # Compute query loss INSIDE context for proper gradient flow
                     query_loss = loss_fn(fmodel, query_data)
 
-                    # CRITICAL FIX: higher doesn't populate .grad automatically
-                    # We need to use autograd.grad() to get gradients
-                    fmodel_params = list(fmodel.parameters())
+                    # SECOND-ORDER: Compute gradients w.r.t. META-PARAMETERS
+                    # The higher library tracks how fmodel depends on self.policy
+                    # through the inner optimization steps, so gradients flow through
+                    # the adaptation via the chain rule: ∂L_query/∂θ₀ = ∂L_query/∂φ · ∂φ/∂θ₀
                     meta_params = list(self.policy.parameters())
 
-                    # Compute gradients w.r.t. adapted parameters
-                    # create_graph=True for second-order (gradient of gradient)
-                    adapted_grads = autograd.grad(
+                    meta_grads = autograd.grad(
                         query_loss,
-                        fmodel_params,
-                        create_graph=True,  # Second-order: need gradients of gradients
+                        meta_params,  # Compute w.r.t. meta-parameters, NOT adapted params
+                        create_graph=False,  # No higher-order derivatives needed
                         allow_unused=True
                     )
 
                     # Manually accumulate gradients to meta-parameters
-                    # FIXED: Added .clone() to prevent gradient aliasing issues
-                    for meta_param, adapted_grad in zip(meta_params, adapted_grads):
-                        if adapted_grad is not None:
+                    for meta_param, meta_grad in zip(meta_params, meta_grads):
+                        if meta_grad is not None:
                             if meta_param.grad is None:
-                                meta_param.grad = adapted_grad.clone()
+                                meta_param.grad = meta_grad.clone()
                             else:
-                                meta_param.grad = meta_param.grad + adapted_grad.clone()
+                                meta_param.grad = meta_param.grad + meta_grad.clone()
 
             else:
                 # First-order MAML - use manual gradient computation
