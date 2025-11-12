@@ -97,8 +97,7 @@ class MAML:
 
         # Clone policy for this task
         ## Make policy
-        #adapted_policy = deepcopy(self.policy)
-        adapted_policy = self.policy 
+        adapted_policy = deepcopy(self.policy)
          
         
 
@@ -195,9 +194,14 @@ class MAML:
 
         meta_loss_tensor = None  # Will accumulate query losses as tensors
         task_losses = []
+        task_pre_adapt_losses = []  # NEW: Track pre-adaptation losses
         use_manual_grads = False  # Track if we're using manual gradient computation
 
         for task_data in task_batch:
+            # NEW: Compute pre-adaptation loss on query set
+            with torch.no_grad():
+                pre_adapt_loss = loss_fn(self.policy, task_data['query'])
+                task_pre_adapt_losses.append(pre_adapt_loss.item())
             if use_higher and not self.first_order and HIGHER_AVAILABLE:
                 # ===== SECOND-ORDER MAML with higher library =====
                 # This computes gradients through the inner loop optimization
@@ -222,26 +226,28 @@ class MAML:
                     # Compute query loss INSIDE context for proper gradient flow
                     query_loss = loss_fn(fmodel, query_data)
 
-                    # SECOND-ORDER: Compute gradients w.r.t. META-PARAMETERS
-                    # The higher library tracks how fmodel depends on self.policy
-                    # through the inner optimization steps, so gradients flow through
-                    # the adaptation via the chain rule: ∂L_query/∂θ₀ = ∂L_query/∂φ · ∂φ/∂θ₀
+                    # CRITICAL FIX: higher doesn't populate .grad automatically
+                    # We need to use autograd.grad() to get gradients
+                    fmodel_params = list(fmodel.parameters())
                     meta_params = list(self.policy.parameters())
 
-                    meta_grads = autograd.grad(
+                    # Compute gradients w.r.t. adapted parameters
+                    # create_graph=True for second-order (gradient of gradient)
+                    adapted_grads = autograd.grad(
                         query_loss,
-                        meta_params,  # Compute w.r.t. meta-parameters, NOT adapted params
-                        create_graph=False,  # No higher-order derivatives needed
+                        fmodel_params,
+                        create_graph=True,  # Second-order: need gradients of gradients
                         allow_unused=True
                     )
 
                     # Manually accumulate gradients to meta-parameters
-                    for meta_param, meta_grad in zip(meta_params, meta_grads):
-                        if meta_grad is not None:
+                    # FIXED: Added .clone() to prevent gradient aliasing issues
+                    for meta_param, adapted_grad in zip(meta_params, adapted_grads):
+                        if adapted_grad is not None:
                             if meta_param.grad is None:
-                                meta_param.grad = meta_grad.clone()
+                                meta_param.grad = adapted_grad.clone()
                             else:
-                                meta_param.grad = meta_param.grad + meta_grad.clone()
+                                meta_param.grad = meta_param.grad + adapted_grad.clone()
 
             else:
                 # First-order MAML - use manual gradient computation
@@ -357,9 +363,9 @@ class MAML:
                 'error': 'invalid_loss'
             }
 
-        # Meta-gradient step
-        # FIXED: Gradients have been manually accumulated via autograd.grad()
-        # Now average them over the valid task count (not double-averaging with loss)
+        # Meta-gradient step: Average accumulated gradients
+        # Both first-order and second-order methods manually accumulate gradients
+        # via autograd.grad(), so we need to average them over the number of valid tasks
         for param in self.policy.parameters():
             if param.grad is not None:
                 param.grad = param.grad / n_valid_tasks
@@ -374,12 +380,16 @@ class MAML:
 
         # Logging
         metrics = {
-            'meta_loss': meta_loss,  # Already a Python float
+            'meta_loss': meta_loss,  # Already a Python float (post-adaptation)
             'mean_task_loss': np.mean(task_losses),
             'std_task_loss': np.std(task_losses),
             'min_task_loss': np.min(task_losses),
             'max_task_loss': np.max(task_losses),
-            'grad_norm': grad_norm.item()  # NEW: Log gradient norm
+            'grad_norm': grad_norm.item(),
+            # NEW: Pre-adaptation metrics
+            'mean_pre_adapt_loss': np.mean(task_pre_adapt_losses) if task_pre_adapt_losses else float('nan'),
+            'std_pre_adapt_loss': np.std(task_pre_adapt_losses) if task_pre_adapt_losses else float('nan'),
+            'adaptation_gain': np.mean(task_pre_adapt_losses) - meta_loss if task_pre_adapt_losses else float('nan')
         }
 
         self.meta_train_losses.append(meta_loss)  # Already a Python float
@@ -602,9 +612,15 @@ class MAMLTrainer:
             # Track training metrics for figure generation
             self.training_history['iterations'].append(iteration)
             self.training_history['meta_loss'].append(train_metrics['meta_loss'])
-            self.training_history['query_loss'].append(train_metrics['meta_loss'])  # Same as meta_loss
+            self.training_history['query_loss'].append(train_metrics['meta_loss'])  # Same as meta_loss (post-adaptation)
             self.training_history['support_loss'].append(train_metrics.get('mean_task_loss', train_metrics['meta_loss']))
             self.training_history['grad_norms'].append(train_metrics.get('grad_norm', 0.0))
+
+            # NEW: Track pre-adaptation metrics at each iteration
+            pre_adapt_loss = train_metrics.get('mean_pre_adapt_loss', float('nan'))
+            if 'pre_adapt_loss' not in self.training_history:
+                self.training_history['pre_adapt_loss'] = []
+            self.training_history['pre_adapt_loss'].append(pre_adapt_loss)
 
             # Track NaN incidents
             has_nan = train_metrics.get('error') == 'invalid_loss' or train_metrics.get('error') == 'no_valid_tasks'
@@ -612,14 +628,20 @@ class MAMLTrainer:
 
             # Logging
             if iteration % self.log_interval == 0:
-                # FIXED: Add more informative logging with gradient norm
+                # FIXED: Add more informative logging with gradient norm and pre/post adaptation
                 grad_norm = train_metrics.get('grad_norm', 0.0)
-                print(f"Iter {iteration}/{n_iterations} | "
-                      f"Meta Loss: {train_metrics['meta_loss']:.4f} | "
-                      f"Task Loss: {train_metrics['mean_task_loss']:.4f} ± "
-                      f"{train_metrics['std_task_loss']:.4f} | "
-                      f"Range: [{train_metrics['min_task_loss']:.4f}, {train_metrics['max_task_loss']:.4f}] | "
-                      f"Grad Norm: {grad_norm:.4f}")
+                pre_adapt_loss = train_metrics.get('mean_pre_adapt_loss', float('nan'))
+                post_adapt_loss = train_metrics['meta_loss']
+                adapt_gain = train_metrics.get('adaptation_gain', float('nan'))
+
+                # Convert losses to fidelities (assuming loss = 1 - fidelity)
+                pre_adapt_fidelity = 1.0 - pre_adapt_loss
+                post_adapt_fidelity = 1.0 - post_adapt_loss
+
+                print(f"Iter {iteration}/{n_iterations}")
+                print(f"  Pre-adapt:  Loss={pre_adapt_loss:.4f}, Fidelity={pre_adapt_fidelity:.4f}")
+                print(f"  Post-adapt: Loss={post_adapt_loss:.4f}, Fidelity={post_adapt_fidelity:.4f}")
+                print(f"  Adaptation Gain: {adapt_gain:.4f} | Grad Norm: {grad_norm:.4f}")
 
                 # DIAGNOSTIC: Check if any parameter has zero gradient
                 if iteration % (self.log_interval * 5) == 0:  # Every 5th log interval
