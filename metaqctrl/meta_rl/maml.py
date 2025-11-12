@@ -181,7 +181,7 @@ class MAML:
         use_higher: bool = True
     ) -> Dict[str, float]:
         """IMPROVED: Added NaN/Inf checks for numerical stability.
-        Single meta-training step on a batch of tasks.deep
+        Single meta-training step on a batch of tasks.
 
         Args:
             task_batch: List of task dictionaries, each with 'support' and 'query'
@@ -191,8 +191,6 @@ class MAML:
         Returns:
             metrics: Dictionary of training metrics
         """
-        self.meta_optimizer.zero_grad()
-
         meta_loss_tensor = None  # Will accumulate query losses as tensors
         task_losses = []
         use_manual_grads = False  # Track if we're using manual gradient computation
@@ -222,28 +220,21 @@ class MAML:
                     # Compute query loss INSIDE context for proper gradient flow
                     query_loss = loss_fn(fmodel, query_data)
 
-                    # CRITICAL FIX: higher doesn't populate .grad automatically
-                    # We need to use autograd.grad() to get gradients
-                    fmodel_params = list(fmodel.parameters())
-                    meta_params = list(self.policy.parameters())
+                    # FIXED: Check for NaN/Inf and skip task entirely to avoid gradient issues
+                    if torch.isnan(query_loss) or torch.isinf(query_loss):
+                        print(f"WARNING: Invalid loss detected (NaN or Inf): {query_loss.item()}")
+                        print(f"  Inner losses: {inner_losses}")
+                        print(f"  Skipping this task to preserve gradient flow")
+                        continue
 
-                    # Compute gradients w.r.t. adapted parameters
-                    # create_graph=True for second-order (gradient of gradient)
-                    adapted_grads = autograd.grad(
-                        query_loss,
-                        fmodel_params,
-                        create_graph=True,  # Second-order: need gradients of gradients
-                        allow_unused=True
-                    )
+                    # CRITICAL FOR SECOND-ORDER: Accumulate query loss as tensor
+                    # Keep it in the computation graph - higher will handle gradient propagation
+                    if meta_loss_tensor is None:
+                        meta_loss_tensor = query_loss
+                    else:
+                        meta_loss_tensor = meta_loss_tensor + query_loss
 
-                    # Manually accumulate gradients to meta-parameters
-                    # FIXED: Added .clone() to prevent gradient aliasing issues
-                    for meta_param, adapted_grad in zip(meta_params, adapted_grads):
-                        if adapted_grad is not None:
-                            if meta_param.grad is None:
-                                meta_param.grad = adapted_grad.clone()
-                            else:
-                                meta_param.grad = meta_param.grad + adapted_grad.clone()
+                    task_losses.append(query_loss.item())
 
             else:
                 # First-order MAML - use manual gradient computation
@@ -255,6 +246,13 @@ class MAML:
 
                     # Compute query loss
                     query_loss = loss_fn(fmodel, task_data['query'])
+
+                    # Check for NaN/Inf
+                    if torch.isnan(query_loss) or torch.isinf(query_loss):
+                        print(f"WARNING: Invalid loss detected (NaN or Inf): {query_loss.item()}")
+                        print(f"  Inner losses: {inner_losses}")
+                        print(f"  Skipping this task to preserve gradient flow")
+                        continue
 
                     # CRITICAL FIX FOR FOMAML:
                     # Manually compute gradients and apply to meta-parameters
@@ -286,6 +284,13 @@ class MAML:
                     # Evaluate on query set
                     query_loss = loss_fn(adapted_policy, task_data['query'])
 
+                    # Check for NaN/Inf
+                    if torch.isnan(query_loss) or torch.isinf(query_loss):
+                        print(f"WARNING: Invalid loss detected (NaN or Inf): {query_loss.item()}")
+                        print(f"  Inner losses: {inner_losses}")
+                        print(f"  Skipping this task to preserve gradient flow")
+                        continue
+
                     # For FOMAML without higher: manually compute gradients
                     meta_params = list(self.policy.parameters())
                     adapted_params = list(adapted_policy.parameters())
@@ -311,21 +316,13 @@ class MAML:
                         print("Install with: pip install higher")
                         self._warned_no_higher = True
 
-            # FIXED: Check for NaN/Inf and skip task entirely to avoid gradient issues
-            if torch.isnan(query_loss) or torch.isinf(query_loss):
-                print(f"WARNING: Invalid loss detected (NaN or Inf): {query_loss.item()}")
-                print(f"  Inner losses: {inner_losses}")
-                print(f"  Skipping this task to preserve gradient flow")
-                # Skip this task - don't accumulate it
-                continue
+                # For first-order MAML, we still accumulate the loss for logging
+                if meta_loss_tensor is None:
+                    meta_loss_tensor = query_loss.detach()
+                else:
+                    meta_loss_tensor = meta_loss_tensor + query_loss.detach()
 
-            # CRITICAL FIX: Accumulate query losses as tensors to preserve gradient graph
-            if meta_loss_tensor is None:
-                meta_loss_tensor = query_loss
-            else:
-                meta_loss_tensor = meta_loss_tensor + query_loss
-
-            task_losses.append(query_loss.item())
+                task_losses.append(query_loss.item())
 
         # FIXED: Properly handle averaging - avoid double averaging
         # Count how many tasks actually contributed (some may have been skipped due to NaN)
@@ -360,13 +357,21 @@ class MAML:
             }
 
         # Meta-gradient step
-        # FIXED: Gradients have been manually accumulated via autograd.grad()
-        # Now average them over the valid task count (not double-averaging with loss)
-        for param in self.policy.parameters():
-            if param.grad is not None:
-                param.grad = param.grad / n_valid_tasks
+        # Clear previous gradients before backward
+        self.meta_optimizer.zero_grad()
 
-        # NEW: Check gradients for NaN/Inf
+        if not use_manual_grads:
+            # SECOND-ORDER MAML: Call backward() to compute gradients through adaptation
+            # higher library automatically handles gradient propagation through inner loop
+            meta_loss_tensor.backward()
+        else:
+            # FIRST-ORDER MAML: Gradients were manually accumulated via autograd.grad()
+            # Average them over the valid task count
+            for param in self.policy.parameters():
+                if param.grad is not None:
+                    param.grad = param.grad / n_valid_tasks
+
+        # NEW: Check gradients for NaN/Inf and clip
         grad_norm = torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
         if torch.isnan(grad_norm) or torch.isinf(grad_norm):
             print(f"WARNING: Invalid gradient norm detected: {grad_norm.item()}")
