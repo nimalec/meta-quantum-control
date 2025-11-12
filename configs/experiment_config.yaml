@@ -10,7 +10,7 @@ noise_type: 'frequency'
 #(0.1, 4.0), "A": (100, 1e5), "omega_c": (0, 800) 
 task_dist_type: 'uniform'
 alpha_range: [0.1, 4.0]      # Spectral exponent range
-A_range: [0.01, 1000]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
+A_range: [0.01, 20]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
 omega_c_range: [1, 100]    # Cutoff frequency range
 num_qubits: 1
 
@@ -18,7 +18,7 @@ num_qubits: 1
 task_feature_dim: 3  # FIXED: Changed from 3 to 4 to match include_model=True (alpha, A, omega_c, model_type)
 hidden_dim: 128 
 n_hidden_layers: 2
-n_segments: 100
+n_segments: 20
 n_controls: 2
 output_scale: 1.0  # FIXED: Increased from 1.0 to allow stronger control signals for better gate fidelity
 activation: 'tanh'
@@ -26,20 +26,20 @@ activation: 'tanh'
 # MAML Hyperparameters
 inner_lr: 0.01  # FIXED: Further reduced from 0.005 for stable gradients with differentiable simulator
 inner_steps: 5   # FIXED: Increased from 3 to allow sufficient adaptation (meta-learning needs this!)
-meta_lr: 0.005
-first_order: false  # FIXED: Use FOMAML (First-Order MAML) to avoid gradient issues with complex quantum simulation
+meta_lr: 0.001
+first_order: true  # FIXED: Use FOMAML (First-Order MAML) to avoid gradient issues with complex quantum simulation
 
 # Training
-n_iterations: 4
-tasks_per_batch: 2  # FIXED: Increased from 4 for more stable meta-gradient estimates
-n_support: 1
-n_query: 1
+n_iterations: 1000
+tasks_per_batch: 20  # FIXED: Increased from 4 for more stable meta-gradient estimates
+n_support: 10
+n_query: 10
 log_interval: 1
 val_interval: 1
-val_tasks: 1
+val_tasks: 10
 
 #New parameters 
-drift_strength: 0.5 
+drift_strength: 0.1 
 sequence: 'ramsey'
 model_types: ['one_over_f']
 psd_model: None 

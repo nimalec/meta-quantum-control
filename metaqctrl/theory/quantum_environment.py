@@ -190,7 +190,7 @@ class QuantumEnvironment:
         if key not in self._torch_sim_cache:
             # Get Lindblad operators
             L_ops_numpy = self.psd_to_lindblad.get_lindblad_operators(task_params)
-            print("🚀", L_ops_numpy)
+    #        print("🚀", L_ops_numpy)
 
             # Convert system to PyTorch tensors
             H0_torch = numpy_to_torch_complex(self.H0, device)
