@@ -41,8 +41,8 @@ def create_task_distribution(config: dict):
 
 
 def task_sampler(n_tasks: int, split: str, task_dist: TaskDistribution, rng: np.random.Generator):
-    ## Sample tasks 
-    """Sample tasks from distribution."""  
+    ## Sample tasks
+    """Sample tasks from distribution."""
 
     if split == 'train':
         seed_offset = 0
@@ -50,8 +50,10 @@ def task_sampler(n_tasks: int, split: str, task_dist: TaskDistribution, rng: np.
         seed_offset = 100000
     else:  # test
         seed_offset = 200000
-    #local_rng = np.random.default_rng(rng.integers(0, 1000000) + seed_offset)
-    local_rng = np.random.default_rng() 
+
+    # Use the passed-in rng to generate a seed, then add offset
+    # This ensures train/val/test tasks are properly separated
+    local_rng = np.random.default_rng(rng.integers(0, 1000000) + seed_offset)
     return task_dist.sample(n_tasks, local_rng)
 
 
@@ -133,10 +135,16 @@ def main(config_path: str):
     print("=" * 70)
     print(f"Config: {config_path}\n")
 
-    # Set random seeds
-    rng = np.random.default_rng()
-    
-    # Device --> define a GPU device 
+    # Set random seeds for reproducibility
+    seed = config.get('seed', 42)
+    rng = np.random.default_rng(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    print(f"Random seed: {seed}")
+
+    # Device --> define a GPU device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}\n")
     

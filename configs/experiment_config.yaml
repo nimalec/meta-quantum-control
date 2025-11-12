@@ -1,5 +1,8 @@
 # Meta-RL for Quantum Control - Experiment Configuration
 
+# Random Seed (for reproducibility)
+seed: 42
+
 # Quantum System
 psd_model: 'one_over_f'  # 'one_over_f', 'lorentzian', 'double_exp'
 horizon: 1  # Total evolution time (arbitrary units)
