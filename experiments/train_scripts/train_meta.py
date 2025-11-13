@@ -20,6 +20,28 @@ from metaqctrl.quantum.gates import GateFidelityComputer, TargetGates
 from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.meta_rl.maml import MAML, MAMLTrainer
 
+def create_quantum_system():
+    """Create a simple 1-qubit quantum system."""
+    # Pauli matrices
+    sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
+    sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
+    sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
+
+    # System Hamiltonians
+    H0 = 0.0 * sigma_z  # No drift
+    H_controls = [sigma_x, sigma_y]
+
+    # PSD model for noise
+    psd_model = NoisePSDModel(model_type='one_over_f')
+    omega_sample = np.array([1.0, 5.0, 10.0])
+
+    psd_to_lindblad = PSDToLindblad(
+        basis_operators=[sigma_x, sigma_y, sigma_z],
+        sampling_freqs=omega_sample,
+        psd_model=psd_model
+    )
+
+    return H0, H_controls, psd_to_lindblad
 
 def create_task_distribution(config: dict):
     ## Create a distribution of tasks , generating P

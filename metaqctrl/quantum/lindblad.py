@@ -125,8 +125,7 @@ class LindbladSimulator:
                 sol = solve_ivp(
                     rhs,
                     [0, t_segment],
-                    rho_t.flatten(),
-                    method=self.method,
+                    rho_t.flatten(), 
                     rtol=1e-8,
                     atol=1e-10
                 )

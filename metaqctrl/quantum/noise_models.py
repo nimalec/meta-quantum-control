@@ -5,8 +5,7 @@ from metaqctrl.quantum.noise_models_v2 import (
     PSDToLindblad,
     TaskDistribution,
     psd_distance,
-    TWO_PI,
-    HBAR
+    TWO_PI 
 )
 
 import numpy as np
