@@ -698,7 +698,7 @@ class MAMLTrainer:
         from pathlib import Path
 
         # Create history file path based on checkpoint path
-        history_path = Path(checkpoint_path).parent / "training_history_v2.json"
+        history_path = Path(checkpoint_path).parent / "training_history.json"
 
         with open(history_path, 'w') as f:
             json.dump(self.training_history, f, indent=2)

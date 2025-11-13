@@ -129,7 +129,7 @@ def plot_panel_d_stability(ax, data: Dict):
 
 def generate_figure3(
     log_path: str = None,
-    output_dir: str = "results/icml_figures"
+    output_dir: str = "results"
 ):
     """
     Generate complete Figure 3 with all panels
@@ -148,7 +148,7 @@ def generate_figure3(
     if log_path is None:
         # Try default locations
         possible_paths = [
-            "checkpoints/training_history_v2.json"
+            "checkpoints/training_history.json"
         ]
         for p in possible_paths:
             if os.path.exists(p):
@@ -199,7 +199,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate Figure 3')
     parser.add_argument('--log-path', type=str, default=None,
                        help='Path to training log JSON file')
-    parser.add_argument('--output-dir', type=str, default='results/icml_figures',
+    parser.add_argument('--output-dir', type=str, default='results',
                        help='Output directory for figures')
     parser.add_argument('--show-snippet', action='store_true',
                        help='Show code snippet for adding logging to train_meta.py')
