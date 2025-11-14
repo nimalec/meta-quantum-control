@@ -191,8 +191,7 @@ def main(config_path: str):
     print("\nSetting up quantum environment...")
     ## Create a setting for a new enviroment
     from metaqctrl.theory.quantum_environment import create_quantum_environment
-    ## Make a quantum enviroment
-    ## Establish quantum enviroment  
+
     
     env = create_quantum_environment(config, target_state)
     print(f"  Environment created: {env.get_cache_stats()}")
@@ -201,9 +200,6 @@ def main(config_path: str):
     print("\nCreating task distribution...")
     task_dist = create_task_distribution(config)
     
-    #variance = task_dist.compute_variance()
-  #  print(f"  Task variance σ²_θ = {variance:.4f}\n")
-
     
     # Create policy
     print("Creating policy network...")

@@ -13,8 +13,8 @@ noise_type: 'frequency'
 #(0.1, 4.0), "A": (100, 1e5), "omega_c": (0, 800) 
 task_dist_type: 'uniform'
 alpha_range: [0.1, 2]      # Spectral exponent range
-A_range: [0.01, 1]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
-omega_c_range: [1, 100]    # Cutoff frequency range
+A_range: [0.01, 10]         # FIXED: Increased to [0.01, 0.1] for better task diversity and meta-learning
+omega_c_range: [1, 300]    # Cutoff frequency range
 num_qubits: 1
 
 # Policy Network
@@ -33,13 +33,13 @@ meta_lr: 0.001
 first_order: true  # FIXED: Use FOMAML (First-Order MAML) to avoid gradient issues with complex quantum simulation
 
 # Training
-n_iterations: 100 
-tasks_per_batch: 5  # FIXED: Increased from 4 for more stable meta-gradient estimates, should be 16  
-n_support: 5 #10 
-n_query: 5 #10 
-log_interval: 1
-val_interval: 1
-val_tasks: 20
+n_iterations: 2000 
+tasks_per_batch: 32  # FIXED: Increased from 4 for more stable meta-gradient estimates, should be 16  
+n_support: 10 #10 
+n_query: 10 #10 
+log_interval: 10
+val_interval: 10
+val_tasks: 20  
 
 #New parameters 
 drift_strength: 0.1 
