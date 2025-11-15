@@ -16,18 +16,59 @@ from tqdm import tqdm
 
 from metaqctrl.quantum.lindblad import LindbladSimulator
 from metaqctrl.quantum.noise_models import TaskDistribution, PSDToLindblad, NoisePSDModel
+from metaqctrl.quantum.noise_adapter import PSDToLindblad2 
 from metaqctrl.quantum.gates import state_fidelity, TargetGates
 from metaqctrl.meta_rl.policy import PulsePolicy
-from metaqctrl.meta_rl.maml import MAML
-from metaqctrl.baselines.robust_control import RobustPolicy
+from metaqctrl.meta_rl.maml import MAML  
 from metaqctrl.theory.optimality_gap import OptimalityGapComputer, GapConstants
 from metaqctrl.utils.checkpoint_utils import load_policy_from_checkpoint
 
 # Import system creation from train_meta
-from train_meta import create_quantum_system, create_task_distribution
+#from ..metatrain_meta import  create_quantum_system, create_task_distribution
 
+def create_quantum_system():
+    """Create a simple 1-qubit quantum system."""
+    # Pauli matrices
+    sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
+    sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
+    sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
+    sigma_p = np.array([[0, 1], [0, 0]], dtype=complex)
 
-def load_models(meta_path: str, robust_path: str, config: dict, device: torch.device):
+    # System Hamiltonians
+    H0 = 0.1 * sigma_z  # No drift
+    H_controls = [sigma_x, sigma_y]
+
+    # PSD model for noise
+    psd_model = NoisePSDModel(model_type='one_over_f')
+    omega_sample = np.linspace(1,1000,1000)
+
+    psd_to_lindblad = PSDToLindblad2(
+        basis_operators=[sigma_p, sigma_z],
+        sampling_freqs=omega_sample,
+        psd_model=psd_model
+    )
+
+    return H0, H_controls, psd_to_lindblad
+
+def create_task_distribution(config: dict):
+    ## Create a distribution of tasks , generating P
+    """Create task distribution P (with optional mixed model support)."""
+    # NEW: Support for mixed model sampling
+    model_types = config.get('model_types')
+    model_probs = config.get('model_probs')
+
+    return TaskDistribution(
+        dist_type=config.get('task_dist_type'),
+        ranges={
+            'alpha': tuple(config.get('alpha_range')),
+            'A': tuple(config.get('A_range')),
+            'omega_c': tuple(config.get('omega_c_range'))
+        },
+        model_types=model_types,  # NEW: List of model types or None for single model
+        model_probs=model_probs   # NEW: Probabilities for each model type
+    )
+
+def load_models(meta_path: str, config: dict, device: torch.device):
     """Load trained meta and robust policies with automatic architecture detection."""
 
     # Load meta-learned policy with auto architecture detection
@@ -35,14 +76,8 @@ def load_models(meta_path: str, robust_path: str, config: dict, device: torch.de
         meta_path, config, device=device, eval_mode=True, verbose=True
     )
     print(f"Loaded meta policy from {meta_path}")
-
-    # Load robust policy with auto architecture detection
-    robust_policy = load_policy_from_checkpoint(
-        robust_path, config, device=device, eval_mode=True, verbose=True
-    )
-    print(f"Loaded robust policy from {robust_path}")
-
-    return meta_policy, robust_policy
+ 
+    return meta_policy 
 
 
 def evaluate_fidelity(
@@ -146,8 +181,7 @@ def evaluate_fidelity(
 
 
 def compute_gap_vs_K(
-    meta_policy: torch.nn.Module,
-    robust_policy: torch.nn.Module,
+    meta_policy: torch.nn.Module, 
     test_tasks: list,
     K_values: list,
     quantum_system: dict,
@@ -162,11 +196,10 @@ def compute_gap_vs_K(
     T = config.get('horizon', 1.0)
     inner_lr = config.get('inner_lr', 0.01)
 
-    results = {'K': [], 'gap': [], 'meta_fid': [], 'robust_fid': []}
+    results = {'K': [], 'gap': [], 'meta_fid': []}
 
     for K in tqdm(K_values, desc="K values"):
-        meta_fidelities = []
-        robust_fidelities = []
+        meta_fidelities = [] 
 
         for task in test_tasks:
             # Meta with adaptation (NOW WITH PROPER GRADIENTS!)
@@ -176,30 +209,22 @@ def compute_gap_vs_K(
             )
             meta_fidelities.append(F_meta)
 
-            # Robust without adaptation
-            F_robust = evaluate_fidelity(
-                robust_policy, task, quantum_system, target_state, T, device,
-                adapt=False, env=env
-            )
-            robust_fidelities.append(F_robust)
 
-        mean_meta = np.mean(meta_fidelities)
-        mean_robust = np.mean(robust_fidelities)
-        gap = mean_meta - mean_robust
+        mean_meta = np.mean(meta_fidelities)  
+        gap = mean_meta  
 
         results['K'].append(K)
         results['gap'].append(gap)
         results['meta_fid'].append(mean_meta)
-        results['robust_fid'].append(mean_robust)
 
-        print(f"  K={K:2d}: Gap = {gap:.4f}, Meta = {mean_meta:.4f}, Robust = {mean_robust:.4f}")
+
+      #  print(f"  K={K:2d}: Gap = {gap:.4f}, Meta = {mean_meta:.4f}, Robust = {mean_robust:.4f}")
 
     return results
 
 
 def compute_gap_vs_variance(
-    meta_policy: torch.nn.Module,
-    robust_policy: torch.nn.Module,
+    meta_policy: torch.nn.Module, 
     base_config: dict,
     variance_multipliers: list,
     quantum_system: dict,
@@ -215,7 +240,7 @@ def compute_gap_vs_variance(
     T = base_config.get('horizon', 1.0)
     inner_lr = base_config.get('inner_lr', 0.01)
 
-    results = {'variance': [], 'gap': [], 'meta_fid': [], 'robust_fid': []}
+    results = {'variance': [], 'gap': [], 'meta_fid': []}
 
     # Base ranges
     base_alpha = base_config.get('alpha_range', [0.5, 2.0])
@@ -288,7 +313,7 @@ def compute_gap_vs_variance(
     return results
 
 
-def plot_results(gap_vs_K: dict, gap_vs_var: dict, constants: GapConstants, save_dir: Path):
+def plot_results(gap_vs_K: dict, constants: GapConstants, save_dir: Path):
     """Generate plots for paper."""
     
     sns.set_style("whitegrid")
@@ -317,26 +342,26 @@ def plot_results(gap_vs_K: dict, gap_vs_var: dict, constants: GapConstants, save
     ax.legend(fontsize=10)
     ax.grid(True, alpha=0.3)
     
-    # Plot 2: Gap vs Variance
-    ax = axes[1]
-    variances = np.array(gap_vs_var['variance'])
-    gaps_var = np.array(gap_vs_var['gap'])
-    #calculate gap over variance 
-    ax.plot(variances, gaps_var, 's-', linewidth=2, markersize=8, label='Empirical Gap')
+    # # Plot 2: Gap vs Variance
+    # ax = axes[1]
+    # variances = np.array(gap_vs_var['variance'])
+    # gaps_var = np.array(gap_vs_var['gap'])
+    # #calculate gap over variance 
+    # ax.plot(variances, gaps_var, 's-', linewidth=2, markersize=8, label='Empirical Gap')
     
-    # Linear fit (theory predicts Gap ∝ σ²)
-    if len(variances) > 1:
-        coeffs = np.polyfit(variances, gaps_var, 1)
-        var_fit = np.linspace(min(variances), max(variances), 100)
-        gap_fit = np.polyval(coeffs, var_fit)
-        ax.plot(var_fit, gap_fit, '--', linewidth=2, 
-                label=f'Linear Fit (slope={coeffs[0]:.3f})', alpha=0.7)
+    # # Linear fit (theory predicts Gap ∝ σ²)
+    # if len(variances) > 1:
+    #     coeffs = np.polyfit(variances, gaps_var, 1)
+    #     var_fit = np.linspace(min(variances), max(variances), 100)
+    #     gap_fit = np.polyval(coeffs, var_fit)
+    #     ax.plot(var_fit, gap_fit, '--', linewidth=2, 
+    #             label=f'Linear Fit (slope={coeffs[0]:.3f})', alpha=0.7)
     
-    ax.set_xlabel('Task Variance σ²_θ', fontsize=12)
-    ax.set_ylabel('Optimality Gap', fontsize=12)
-    ax.set_title('Gap vs Task Variance', fontsize=14, fontweight='bold')
-    ax.legend(fontsize=10)
-    ax.grid(True, alpha=0.3)
+    # ax.set_xlabel('Task Variance σ²_θ', fontsize=12)
+    # ax.set_ylabel('Optimality Gap', fontsize=12)
+    # ax.set_title('Gap vs Task Variance', fontsize=14, fontweight='bold')
+    # ax.legend(fontsize=10)
+    # ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
     
@@ -348,17 +373,19 @@ def plot_results(gap_vs_K: dict, gap_vs_var: dict, constants: GapConstants, save
     plt.show()
 
 
-def main(args):
+#def main(args):
+def main():
     """Main evaluation script."""
 
     # Load config
-    with open(args.config, 'r') as f:
+    config_path = '../../configs/experiment_config.yaml'
+    with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
 
     print("=" * 70)
     print("Optimality Gap Evaluation (WITH DIFFERENTIABLE ADAPTATION!)")
     print("=" * 70)
-    print(f"Config: {args.config}\n")
+   # print(f"Config: {args.config}\n")
 
     # Device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -366,10 +393,12 @@ def main(args):
 
     # Create quantum system
     print("Setting up quantum system...")
-    quantum_system = create_quantum_system(config)
+    #quantum_system = create_quantum_system(config)
+    quantum_system = create_quantum_system()  
+    
 
     # Target state
-    target_gate_name = config.get('target_gate', 'hadamard')
+    target_gate_name = config.get('target_gate', 'pauli_x')
     if target_gate_name == 'hadamard':
         U_target = TargetGates.hadamard()
     else:
@@ -383,13 +412,13 @@ def main(args):
     from metaqctrl.theory.quantum_environment import create_quantum_environment
     env = create_quantum_environment(config, target_state)
     print(f"  Environment created: {env.get_cache_stats()}")
-    print("  ✓ Gradient flow through quantum simulation enabled!")
+    print("   Gradient flow through quantum simulation enabled!")
 
     # Load models
     print("\nLoading trained models...")
-    meta_policy, robust_policy = load_models(
-        args.meta_path, args.robust_path, config, device
-    )
+    meta_path = "../train_scripts/checkpoints/maml_best_pauli_x_best_policy.pt"
+    meta_policy= load_models(
+       meta_path, config, device)
 
     # Sample test tasks
     print("\nSampling test tasks...")
@@ -405,31 +434,32 @@ def main(args):
     constants = None  # Skip for now, or load from cache
 
     # Compute gap vs K (NOW WITH PROPER GRADIENTS!)
-    K_values = config.get('gap_K_values', [1, 3, 5, 10, 20])
+    K_values = config.get('gap_K_values', [1, 2, 3,4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 , 19, 20])
     gap_vs_K_results = compute_gap_vs_K(
-        meta_policy, robust_policy, test_tasks[:50], K_values,
+        meta_policy, test_tasks[:50], K_values,
         quantum_system, target_state, config, device, env=env
     )
 
-    # Compute gap vs variance (NOW WITH PROPER GRADIENTS!)
-    variance_multipliers = [0.5, 0.75, 1.0, 1.25, 1.5]
-    gap_vs_var_results = compute_gap_vs_variance(
-        meta_policy, robust_policy, config, variance_multipliers,
-        quantum_system, target_state, device, n_tasks_per_variance=30, env=env
-    )
+    # # Compute gap vs variance (NOW WITH PROPER GRADIENTS!)
+    # variance_multipliers = [0.5, 0.75, 1.0, 1.25, 1.5]
+    # gap_vs_var_results = compute_gap_vs_variance(
+    #     meta_policy, robust_policy, config, variance_multipliers,
+    #     quantum_system, target_state, device, n_tasks_per_variance=30, env=env
+    # )
 
     # Plot
-    save_dir = Path(args.save_dir)
+    save_dir = Path('results') 
+    #save_dir = Path(args.save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    plot_results(gap_vs_K_results, gap_vs_var_results, constants, save_dir)
+    plot_results(gap_vs_K_results, constants, save_dir)
 
     # Save results
     import json
     results = {
-        'gap_vs_K': gap_vs_K_results,
-        'gap_vs_variance': gap_vs_var_results
-    }
+        'gap_vs_K': gap_vs_K_results} 
+   #     'gap_vs_variance': gap_vs_var_results
+  #  }
 
     results_path = save_dir / 'gap_results.json'
     with open(results_path, 'w') as f:
@@ -442,12 +472,5 @@ def main(args):
     print("=" * 70)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Evaluate optimality gap')
-    parser.add_argument('--config', type=str, required=True, help='Config file')
-    parser.add_argument('--meta_path', type=str, required=True, help='Path to meta model')
-    parser.add_argument('--robust_path', type=str, required=True, help='Path to robust model')
-    parser.add_argument('--save_dir', type=str, default='results/gap_eval', help='Save directory')
-    
-    args = parser.parse_args()
-    main(args)
+if __name__ == "__main__":  
+    main()

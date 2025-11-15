@@ -534,14 +534,14 @@ class MAMLTrainer:
         self.training_history = {
             'iterations': [],          # Iteration numbers
             'meta_loss': [],           # Meta-loss (query loss)
-            'support_loss': [],        # Support loss (pre-adaptation)
-            'query_loss': [],          # Query loss (post-adaptation)
             'val_fidelity': [],        # Validation fidelity
             'val_error': [],           # Validation error
             'val_iteration': [],       # Iterations where validation occurred
             'val_fidelity_std': [],    # Validation fidelity std
             'grad_norms': [],          # Gradient norms
-            'nan_count': []            # NaN/Inf incidents
+            'nan_count': []  ,          # NaN/Inf incidents
+            'val_post_adapt': [], 
+            'val_pre_adapt': [] 
         }
     
     def generate_task_batch(self, n_tasks: int, split: str = 'train') -> List[Dict]:
@@ -612,15 +612,13 @@ class MAMLTrainer:
             # Track training metrics for figure generation
             self.training_history['iterations'].append(iteration)
             self.training_history['meta_loss'].append(train_metrics['meta_loss'])
-            self.training_history['query_loss'].append(train_metrics['meta_loss'])  # Same as meta_loss (post-adaptation)
-            self.training_history['support_loss'].append(train_metrics.get('mean_task_loss', train_metrics['meta_loss']))
             self.training_history['grad_norms'].append(train_metrics.get('grad_norm', 0.0))
 
             # NEW: Track pre-adaptation metrics at each iteration
             pre_adapt_loss = train_metrics.get('mean_pre_adapt_loss', float('nan'))
-            if 'pre_adapt_loss' not in self.training_history:
-                self.training_history['pre_adapt_loss'] = []
-            self.training_history['pre_adapt_loss'].append(pre_adapt_loss)
+           # if 'pre_adapt_loss' not in self.training_history:
+             #   self.training_history['pre_adapt_loss'] = []
+
 
             # Track NaN incidents
             has_nan = train_metrics.get('error') == 'invalid_loss' or train_metrics.get('error') == 'no_valid_tasks'
@@ -668,6 +666,9 @@ class MAMLTrainer:
                 self.training_history['val_error'].append(val_error)
                 self.training_history['val_iteration'].append(iteration)
                 self.training_history['val_fidelity_std'].append(val_fidelity_std)
+                self.training_history['val_pre_adapt'].append(val_metrics['val_loss_pre_adapt'])
+                self.training_history['val_post_adapt'].append(val_metrics['val_loss_post_adapt'])
+                
 
                 print(f"\n[Validation] Iter {iteration}")
                 print(f"  Pre-adapt loss:  {val_metrics['val_loss_pre_adapt']:.4f}")
