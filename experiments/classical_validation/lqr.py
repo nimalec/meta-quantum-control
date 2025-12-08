@@ -752,16 +752,4 @@ if __name__ == "__main__":
     results_var = experiment_gap_vs_variance()
     experiment_trajectory_comparison()
     create_summary_figure(results_K, results_var)
-    
-    print("\n" + "=" * 70)
-    print("SUMMARY")
-    print("=" * 70)
-    print(f"Exponential saturation R² = {results_K['r_squared']:.4f}")
-    print(f"Linear variance scaling R² = {results_var['r2_inf']:.4f}")
-    print(f"Fitted adaptation rate β = {results_K['beta']:.4f}")
-    print(f"Asymptotic gap A_∞ = {results_K['A_inf']:.4f}")
-    print("\nGenerated figures:")
-    print("  - lqr_gap_vs_K.png")
-    print("  - lqr_gap_vs_variance.png")
-    print("  - lqr_trajectories.png")
-    print("  - lqr_summary.png")
+     
