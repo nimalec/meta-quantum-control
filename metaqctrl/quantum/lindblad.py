@@ -184,10 +184,6 @@ class LindbladSimulator:
         phi_plus = np.eye(d).flatten() / np.sqrt(d)
         rho_entangled = np.outer(phi_plus, phi_plus.conj())
         
-        # Evolve under (I ⊗ Φ)
-        # For now, evolve just the system part
-        # TODO: Implement full process tomography if needed
-        
         # Alternative: Build from basis evolution
         choi = np.zeros((d**2, d**2), dtype=complex)
         for i in range(d):
