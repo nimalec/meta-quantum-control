@@ -58,8 +58,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ### Setup
 
 ```bash
-# Clone the repository
-git clone https://github.com/nimalec/meta-quantum-control.git
+# Clone the repository 
 cd meta-quantum-control
 
 # Install dependencies
@@ -198,9 +197,6 @@ All experiments are organized by figure number. Each script uses fixed random se
 cd experiments/fig_5_meta_training
 python train_meta.py --config ../../configs/experiment_config.yaml
 
-# GRAPE baseline
-python train_grape.py --config ../../configs/experiment_config.yaml
-
 # Adaptation gap analysis
 cd ../fig_3_adaptation_gap_analysis
 python generate_adaptation_gap_figure.py
@@ -242,39 +238,6 @@ Where `compute_loss`:
 3. Computes gate fidelity
 4. Returns `loss = 1 - fidelity`
 
-## Testing
-
-```bash
-# Run all tests
-make test
-
-# Run with pytest directly
-uv run pytest tests/
-
-# Run with verbose output
-make test-verbose
-
-# Run with coverage report
-make test-coverage
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**CUDA out of memory**: Reduce `tasks_per_batch` or `n_segments` in config.
-
-**NaN losses during training**:
-- Reduce `inner_lr` (try 0.005 or 0.001)
-- Enable `first_order: true` to use FOMAML
-- Reduce `dt_training` for better numerical stability
-
-**Slow training**:
-- Use `first_order: true` (avoids second-order gradients)
-- Reduce `inner_steps` to 3-5
-- Use GPU if available
-
-**Import errors**: Ensure the virtual environment is activated and run `uv sync --all-groups`.
 
 ## Citation
 
@@ -297,6 +260,3 @@ MIT License - see LICENSE file for details.
 3. Run tests (`make test`)
 4. Submit a pull request
 
-## Contact
-
-For questions or issues, please open a GitHub issue at https://github.com/nimalec/meta-quantum-control/issues
