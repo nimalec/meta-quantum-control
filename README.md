@@ -1,6 +1,4 @@
-# Meta-RL for Quantum Control
-Implementation of "Meta-Reinforcement Learning for Quantum Control: Generalization and Robustness under Noise Shifts"
-
+# Meta Learning for Adaptive Quantum Control 
 ## Quick Start
 
 ### Prerequisites
@@ -26,12 +24,12 @@ source .venv/bin/activate  # Mac/Linux
 
 ## Running Experiments
 
-### 1. Training a Meta-Learned Policy
+### 1. Trainin the Meta Policy 
 
-Train a MAML policy for 1-qubit quantum control:
+Train a FOMAML policy for 1-qubit quantum control:
 
 ```bash
-cd experiments
+cd experiments/fig_5_meta_training 
 python train_meta.py --config ../configs/experiment_config.yaml
 ```
 
@@ -41,11 +39,6 @@ This will:
 - Save training metrics to `checkpoints/training_history.json`
 - Display training progress with validation metrics
 
-
-This generates three publication-quality figures:
-- `training_validation_curves.png` - Training loss and validation metrics
-- `validation_fidelity.png` - Validation fidelity with error bars
-- `complete_training_summary.png` - Comprehensive 2×2 grid with all metrics
 
 ### 2. Configuration
 
@@ -71,6 +64,7 @@ A_range: [0.05, 0.3]
 omega_c_range: [2.0, 8.0]
 ```
 
+
 ## Testing
 
 ```bash
@@ -87,36 +81,12 @@ make test-verbose
 make test-coverage
 ```
 
-
-## Project Structure
-
-```
-meta-quantum-control/
-├── metaqctrl/              # Main package
-│   ├── quantum/            # Quantum simulation (Lindblad, gates, noise)
-│   ├── meta_rl/            # MAML implementation (policy, training)
-│   ├── theory/             # Theoretical tools (environment, bounds)
-│   └── utils/              # Plotting and utilities
-├── experiments/            # Training scripts
-│   ├── train_meta.py       # 1-qubit training
-│   └── train_meta_two_qubit.py  # 2-qubit training
-├── configs/                # Configuration files
-├── tests/                  # Unit tests
-└── results/                # Generated figures
-```
-
-## Contributing
-```bash
-# Adding packages
-uv add <package>
-```
-
 ## Citation
 
 ```bibtex
 @inproceedings{leclerc2025meta,
   title={Meta-Reinforcement Learning for Quantum Control},
-  author={Leclerc, Nima; Brawand, Nicholas},
+  author={Leclerc, Nima; Miller, Chris; Brawand, Nicholas},
   year={2025}
 }
 ```
