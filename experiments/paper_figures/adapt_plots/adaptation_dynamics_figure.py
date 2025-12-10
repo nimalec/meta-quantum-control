@@ -1,20 +1,8 @@
-"""
-Adaptation Dynamics Figure for Paper
-=====================================
-
-Generates a 3-panel figure:
-(a) Loss vs K for 5-10 tasks - Different tasks converge at different rates from shared init
-(b) Fidelity distribution: robust vs meta-init vs adapted - Box/violin plot
-(c) Pulse sequences for 2-3 tasks - Shows controls differ across tasks
-
-Uses meta-trained policy to generate all panels.
-"""
-
 import sys
 from pathlib import Path
 
 # Add project root to path
-project_root = Path(__file__).parent.parent.parent
+project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 import numpy as np
@@ -26,6 +14,8 @@ from copy import deepcopy
 # Import project modules
 from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.quantum.lindblad_torch import DifferentiableLindbladSimulator
+from metaqctrl.quantum.gates import TargetGates
+from metaqctrl.utils.checkpoint_utils import load_policy_from_checkpoint
 
 plt.rcParams.update({
     'font.size': 10,
@@ -38,10 +28,7 @@ plt.rcParams.update({
     'figure.dpi': 150,
 })
 
-# =============================================================================
-# Quantum System Setup
-# =============================================================================
-
+## Single qubit 
 def create_single_qubit_system(gamma_deph=0.05, gamma_relax=0.02, device='cpu'):
     """Create a single-qubit Lindblad simulator with given noise rates."""
     # Pauli matrices
@@ -52,9 +39,8 @@ def create_single_qubit_system(gamma_deph=0.05, gamma_relax=0.02, device='cpu'):
     # Drift Hamiltonian
     H0 = 0.5 * sigma_z
 
-    # Control Hamiltonians
-    H_controls = [sigma_x, sigma_y]
-
+    # Control Hamiltonians  
+    H_controls = [sigma_x, sigma_y] 
     # Lindblad operators
     L_ops = []
     if gamma_deph > 0:
@@ -125,14 +111,13 @@ def sample_tasks(n_tasks, device='cpu', seed=None):
         torch.manual_seed(seed)
 
     tasks = []
+  
+    gamma_deph_range = (0.0001, 0.1)  # Wide range: 0.0001 to 0.1
+    gamma_relax_range = (0.0001, 0.05)  # Proportionally wide range
 
-    # Task parameter ranges
-    gamma_deph_range = (0.02, 0.12)
-    gamma_relax_range = (0.01, 0.06)
-
-    # Initial state |0> and target |+> = (|0> + |1>)/sqrt(2)
+    # Initial state |0> and target |1> (Pauli X gate)
     rho0 = torch.tensor([[1, 0], [0, 0]], dtype=torch.complex64, device=device)
-    target_rho = torch.tensor([[0.5, 0.5], [0.5, 0.5]], dtype=torch.complex64, device=device)
+    target_rho = torch.tensor([[0, 0], [0, 1]], dtype=torch.complex64, device=device)
 
     for i in range(n_tasks):
         gamma_deph = np.random.uniform(*gamma_deph_range)
@@ -140,11 +125,11 @@ def sample_tasks(n_tasks, device='cpu', seed=None):
 
         sim = create_single_qubit_system(gamma_deph, gamma_relax, device)
 
-        # Task features: normalized noise parameters
+        # Task features: normalized noise parameters (adjusted for new ranges)
         task_features = torch.tensor([
-            gamma_deph / 0.1,  # Normalized dephasing
-            gamma_relax / 0.05,  # Normalized relaxation
-            (gamma_deph + gamma_relax) / 0.15  # Combined noise level
+            gamma_deph / 0.1,  #normalize 
+            gamma_relax / 0.05, #normalize  
+            (gamma_deph + gamma_relax) / 0.15  #normalize  
         ], dtype=torch.float32, device=device)
 
         tasks.append({
@@ -161,96 +146,68 @@ def sample_tasks(n_tasks, device='cpu', seed=None):
     return tasks
 
 
-# =============================================================================
-# Policy Training (if no checkpoint available)
-# =============================================================================
 
-def train_meta_policy_quick(n_iterations=500, device='cpu'):
+
+def train_robust_policy(n_iterations=300, device='cpu', config=None):
     """
-    Quick meta-training to get a reasonable policy.
-    For paper figures, you should use a properly trained checkpoint.
+    Train a robust policy on a FIXED average noise level (no adaptation).
+
+    This represents a controller optimized for "typical" conditions that cannot
+    adapt to different noise environments - showing the benefit of meta-learning.
     """
-    print("Training meta-policy (quick version for figure generation)...")
+    print("Training robust baseline policy on FIXED average noise...")
+
+    # Use config if provided, otherwise defaults matching experiment_config.yaml
+    if config is None:
+        config = {
+            'task_feature_dim': 3,
+            'hidden_dim': 128,
+            'n_hidden_layers': 2,
+            'n_segments': 60,
+            'n_controls': 2,
+            'output_scale': 1.0
+        }
 
     policy = PulsePolicy(
-        task_feature_dim=3,
-        hidden_dim=64,
-        n_hidden_layers=2,
-        n_segments=20,
-        n_controls=2,
-        output_scale=1.0
-    ).to(device)
-
-    meta_optimizer = optim.Adam(policy.parameters(), lr=1e-3)
-    inner_lr = 0.05
-    inner_steps = 3
-
-    for iteration in range(n_iterations):
-        meta_optimizer.zero_grad()
-
-        # Sample tasks
-        tasks = sample_tasks(4, device=device)
-
-        meta_loss = 0
-        for task in tasks:
-            # Clone policy for inner loop
-            adapted_policy = deepcopy(policy)
-            inner_opt = optim.SGD(adapted_policy.parameters(), lr=inner_lr)
-
-            # Inner loop
-            for _ in range(inner_steps):
-                inner_opt.zero_grad()
-                loss = compute_loss(adapted_policy, task)
-                loss.backward()
-                inner_opt.step()
-
-            # Query loss
-            query_loss = compute_loss(adapted_policy, task)
-            meta_loss = meta_loss + query_loss
-
-        meta_loss = meta_loss / len(tasks)
-
-        # Meta update (FOMAML style - just use query gradients)
-        meta_loss.backward()
-        meta_optimizer.step()
-
-        if iteration % 100 == 0:
-            fidelity = 1 - meta_loss.item()
-            print(f"  Iter {iteration}: Fidelity = {fidelity:.4f}")
-
-    print("Meta-training complete.")
-    return policy
-
-
-def train_robust_policy(n_iterations=300, device='cpu'):
-    """Train a robust policy on the mean task (no adaptation)."""
-    print("Training robust baseline policy...")
-
-    policy = PulsePolicy(
-        task_feature_dim=3,
-        hidden_dim=64,
-        n_hidden_layers=2,
-        n_segments=20,
-        n_controls=2,
-        output_scale=1.0
+        task_feature_dim=config['task_feature_dim'],
+        hidden_dim=config['hidden_dim'],
+        n_hidden_layers=config['n_hidden_layers'],
+        n_segments=config['n_segments'],
+        n_controls=config['n_controls'],
+        output_scale=config['output_scale']
     ).to(device)
 
     optimizer = optim.Adam(policy.parameters(), lr=1e-3)
 
+    avg_gamma_deph = 0.02
+    avg_gamma_relax = 0.01
+
+    sim = create_single_qubit_system(avg_gamma_deph, avg_gamma_relax, device)
+    rho0 = torch.tensor([[1, 0], [0, 0]], dtype=torch.complex64, device=device)
+    target_rho = torch.tensor([[0, 0], [0, 1]], dtype=torch.complex64, device=device)
+
+    fixed_task = {
+        'task_features': torch.tensor([
+            avg_gamma_deph / 0.1,
+            avg_gamma_relax / 0.05,
+            (avg_gamma_deph + avg_gamma_relax) / 0.15
+        ], dtype=torch.float32, device=device),
+        'simulator': sim,
+        'rho0': rho0,
+        'target_rho': target_rho,
+        'T': 1.0,
+    }
+
     for iteration in range(n_iterations):
-        optimizer.zero_grad()
-
-        # Sample tasks and average loss
-        tasks = sample_tasks(8, device=device)
-        total_loss = sum(compute_loss(policy, t) for t in tasks) / len(tasks)
-
+        optimizer.zero_grad() 
+        total_loss = compute_loss(policy, fixed_task)  
         total_loss.backward()
         optimizer.step()
 
         if iteration % 100 == 0:
             print(f"  Iter {iteration}: Loss = {total_loss.item():.4f}")
 
-    print("Robust training complete.")
+    print(f"Robust training complete (fixed gamma_deph={avg_gamma_deph}, gamma_relax={avg_gamma_relax}).")
     return policy
 
 
@@ -258,16 +215,41 @@ def train_robust_policy(n_iterations=300, device='cpu'):
 # Panel (a): Loss vs K for multiple tasks
 # =============================================================================
 
-def generate_panel_a_data(meta_policy, n_tasks=8, max_K=15, inner_lr=0.05, device='cpu'):
+def generate_panel_a_data(meta_policy, max_K=15, inner_lr=0.05, device='cpu'):
     """
-    Generate data for Panel (a): Loss trajectories during adaptation.
-
-    Returns:
-        losses_by_task: dict mapping task_id -> list of losses at each K
+    Generate adaptation curves for 4 diverse tasks spanning the noise range.
+    Uses representative tasks to avoid crowding while showing task diversity.
     """
     print("Generating Panel (a) data: Loss vs K...")
 
-    tasks = sample_tasks(n_tasks, device=device, seed=42)
+    # Create 4 diverse tasks spanning the full gamma_deph range [0.0001, 0.1]
+    diverse_noise_levels = [
+        (0.001, 0.0005, 'Very low'),    # Near minimum
+        (0.02, 0.01, 'Low-mid'),         # Lower-middle
+        (0.05, 0.025, 'Mid-high'),       # Upper-middle
+        (0.09, 0.045, 'High'),           # Near maximum
+    ]
+
+    rho0 = torch.tensor([[1, 0], [0, 0]], dtype=torch.complex64, device=device)
+    target_rho = torch.tensor([[0, 0], [0, 1]], dtype=torch.complex64, device=device)
+
+    tasks = []
+    for i, (gd, gr, label) in enumerate(diverse_noise_levels):
+        sim = create_single_qubit_system(gd, gr, device)
+        task_features = torch.tensor([gd/0.1, gr/0.05, (gd+gr)/0.15],
+                                      dtype=torch.float32, device=device)
+        tasks.append({
+            'task_features': task_features,
+            'simulator': sim,
+            'rho0': rho0,
+            'target_rho': target_rho,
+            'T': 1.0,
+            'gamma_deph': gd,
+            'gamma_relax': gr,
+            'task_id': i,
+            'label': label
+        })
+
     losses_by_task = {}
 
     for task in tasks:
@@ -297,7 +279,8 @@ def generate_panel_a_data(meta_policy, n_tasks=8, max_K=15, inner_lr=0.05, devic
         losses_by_task[task_id] = {
             'losses': losses,
             'gamma_deph': task['gamma_deph'],
-            'gamma_relax': task['gamma_relax']
+            'gamma_relax': task['gamma_relax'],
+            'label': task.get('label', f"Task {task_id}")
         }
 
     return losses_by_task
@@ -308,12 +291,7 @@ def generate_panel_a_data(meta_policy, n_tasks=8, max_K=15, inner_lr=0.05, devic
 # =============================================================================
 
 def generate_panel_b_data(meta_policy, robust_policy, n_tasks=50, K_adapt=5, inner_lr=0.05, device='cpu'):
-    """
-    Generate data for Panel (b): Fidelity distributions.
 
-    Returns:
-        fidelities: dict with 'robust', 'meta_init', 'adapted' lists
-    """
     print("Generating Panel (b) data: Fidelity distributions...")
 
     tasks = sample_tasks(n_tasks, device=device, seed=123)
@@ -365,19 +343,19 @@ def generate_panel_c_data(meta_policy, n_tasks=3, K_adapt=5, inner_lr=0.05, devi
     """
     print("Generating Panel (c) data: Pulse sequences...")
 
-    # Sample tasks with distinct noise levels
+    # Sample tasks with distinct noise levels spanning the full range
     np.random.seed(789)
     tasks = []
 
-    # Low, medium, high noise tasks
+    # Low, medium, high noise tasks - spanning 0.0001 to 0.1 range
     noise_levels = [
-        (0.03, 0.01, 'Low noise'),
-        (0.07, 0.03, 'Medium noise'),
-        (0.11, 0.05, 'High noise')
+        (0.001, 0.0005, 'Low noise'),      # Very low noise
+        (0.02, 0.01, 'Medium noise'),      # Moderate noise
+        (0.08, 0.04, 'High noise')         # High noise
     ]
 
     rho0 = torch.tensor([[1, 0], [0, 0]], dtype=torch.complex64, device=device)
-    target_rho = torch.tensor([[0.5, 0.5], [0.5, 0.5]], dtype=torch.complex64, device=device)
+    target_rho = torch.tensor([[0, 0], [0, 1]], dtype=torch.complex64, device=device)  # Pauli X target
 
     for i, (gd, gr, label) in enumerate(noise_levels):
         sim = create_single_qubit_system(gd, gr, device)
@@ -440,9 +418,15 @@ def create_figure(losses_data, fidelity_data, pulse_data, save_path=None):
     for i, (task_id, data) in enumerate(losses_data.items()):
         losses = data['losses']
         K_vals = np.arange(len(losses))
+        # Use gamma_phi value with appropriate precision based on magnitude
+        gamma_val = data['gamma_deph']
+        if gamma_val < 0.01:
+            label_str = f"$\\gamma_\\phi$={gamma_val:.3f}"
+        else:
+            label_str = f"$\\gamma_\\phi$={gamma_val:.2f}"
         ax.plot(K_vals, losses, 'o-', color=colors[i], markersize=4,
-                linewidth=1.5, alpha=0.7,
-                label=f"$\\gamma_\\phi$={data['gamma_deph']:.2f}")
+                linewidth=1.5, alpha=0.8,
+                label=label_str)
 
     ax.set_xlabel('Adaptation Steps $K$')
     ax.set_ylabel('Loss $\\mathcal{L}(\\theta_K)$')
@@ -450,7 +434,7 @@ def create_figure(losses_data, fidelity_data, pulse_data, save_path=None):
     ax.set_xlim(-0.5, len(losses_data[0]['losses']) - 0.5)
     ax.set_ylim(0, None)
     ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper right', fontsize=7, ncol=2)
+    ax.legend(loc='upper right', fontsize=8)
 
     # --- Panel (b): Fidelity Distribution ---
     ax = axes[1]
@@ -489,25 +473,24 @@ def create_figure(losses_data, fidelity_data, pulse_data, save_path=None):
     n_segments = list(pulse_data.values())[0]['controls'].shape[0]
     t = np.linspace(0, 1, n_segments)
 
-    linestyles = ['-', '--', ':']
     colors_pulse = ['#2ecc71', '#f39c12', '#e74c3c']
 
     for i, (task_id, data) in enumerate(pulse_data.items()):
         controls = data['controls']
         label = data['label']
 
-        # Plot X control (solid) and Y control (dashed)
-        ax.plot(t, controls[:, 0], linestyle=linestyles[i], color=colors_pulse[i],
-                linewidth=2, label=f'{label} ($u_x$)')
-        ax.plot(t, controls[:, 1], linestyle=linestyles[i], color=colors_pulse[i],
-                linewidth=1.5, alpha=0.6)
+        # Plot X control (solid line) and Y control (dashed line) with same color
+        ax.plot(t, controls[:, 0], linestyle='-', color=colors_pulse[i],
+                linewidth=2, label=f'{label}: $u_x$')
+        ax.plot(t, controls[:, 1], linestyle='--', color=colors_pulse[i],
+                linewidth=1.5, label=f'{label}: $u_y$')
 
     ax.set_xlabel('Time $t/T$')
     ax.set_ylabel('Control Amplitude')
     ax.set_title('(c) Task-Adapted Pulse Sequences')
     ax.set_xlim(0, 1)
     ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper right', fontsize=8)
+    ax.legend(loc='lower left', fontsize=7, ncol=2)
     ax.axhline(y=0, color='gray', linestyle='-', linewidth=0.5)
 
     plt.tight_layout()
@@ -521,55 +504,61 @@ def create_figure(losses_data, fidelity_data, pulse_data, save_path=None):
     return fig
 
 
-# =============================================================================
-# Main
-# =============================================================================
+
 
 def main():
-    print("=" * 70)
-    print("Generating Adaptation Dynamics Figure")
-    print("=" * 70)
-
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print(f"Using device: {device}")
+    print(f"Using device: {device}") 
+    config = {
+        'task_feature_dim': 3,
+        'hidden_dim': 128,
+        'n_hidden_layers': 2,
+        'n_segments': 60,
+        'n_controls': 2,
+        'output_scale': 1.0,
+        'inner_lr': 0.01,  # From experiment_config.yaml
+        'horizon': 1.0,
+        'target_gate': 'pauli_x',
+    }
 
-    # Check for pre-trained checkpoint
-    checkpoint_dir = project_root / "checkpoints"
-    checkpoint_path = None
-
-    if checkpoint_dir.exists():
-        checkpoints = list(checkpoint_dir.glob("*_policy.pt")) + list(checkpoint_dir.glob("*_best.pt"))
-        if checkpoints:
-            checkpoint_path = max(checkpoints, key=lambda p: p.stat().st_mtime)
-            print(f"Found checkpoint: {checkpoint_path}")
-
+    # Specific checkpoint path - using maml_best_pauli_x_best.pt
+    checkpoint_path = project_root / "experiments" / "checkpoints" / "maml_best_pauli_x_best.pt" 
+    print(f"Looking for checkpoint: {checkpoint_path}") 
     # Load or train meta-policy
-    if checkpoint_path and checkpoint_path.exists():
+    if checkpoint_path.exists():
         print("Loading pre-trained meta-policy...")
-        meta_policy = PulsePolicy(
-            task_feature_dim=3,
-            hidden_dim=64,
-            n_hidden_layers=2,
-            n_segments=20,
-            n_controls=2
-        ).to(device)
-        meta_policy.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        print(f"  Path: {checkpoint_path}")
+        # Use load_policy_from_checkpoint for automatic architecture detection
+        meta_policy = load_policy_from_checkpoint(
+            str(checkpoint_path),
+            config,
+            device=torch.device(device),
+            eval_mode=False,  # We need gradients for adaptation
+            verbose=True
+        )
+        print(f"  Loaded successfully! Parameters: {meta_policy.count_parameters():,}")
     else:
-        print("No checkpoint found. Training quick meta-policy...")
-        meta_policy = train_meta_policy_quick(n_iterations=500, device=device)
+        print(f"Checkpoint not found at {checkpoint_path}")
+        print("Training quick meta-policy...")
+        pass  
 
-    # Train robust baseline
-    robust_policy = train_robust_policy(n_iterations=300, device=device)
+
+    # Train robust baseline with matching config
+    robust_policy = train_robust_policy(n_iterations=300, device=device, config=config)
+
+    # Get inner_lr from config
+    inner_lr = config['inner_lr']
+    print(f"\nUsing inner_lr={inner_lr} (from experiment_config.yaml)")
 
     # Generate data for each panel
     print("\n" + "-" * 50)
-    losses_data = generate_panel_a_data(meta_policy, n_tasks=8, max_K=12, device=device)
+    losses_data = generate_panel_a_data(meta_policy, max_K=12, inner_lr=inner_lr, device=device)
 
     print("-" * 50)
-    fidelity_data = generate_panel_b_data(meta_policy, robust_policy, n_tasks=50, device=device)
+    fidelity_data = generate_panel_b_data(meta_policy, robust_policy, n_tasks=50, K_adapt=5, inner_lr=inner_lr, device=device)
 
     print("-" * 50)
-    pulse_data = generate_panel_c_data(meta_policy, n_tasks=3, device=device)
+    pulse_data = generate_panel_c_data(meta_policy, n_tasks=3, K_adapt=5, inner_lr=inner_lr, device=device)
 
     # Create figure
     print("\n" + "-" * 50)
@@ -577,7 +566,7 @@ def main():
 
     output_dir = Path(__file__).parent / "outputs"
     output_dir.mkdir(exist_ok=True)
-    save_path = str(output_dir / "adaptation_dynamics_figure.png")
+    save_path = str(output_dir / "adaptation_dynamics_figure_2.png")
 
     create_figure(losses_data, fidelity_data, pulse_data, save_path=save_path)
 

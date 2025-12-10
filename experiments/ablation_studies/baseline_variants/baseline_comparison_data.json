@@ -1,0 +1,28 @@
+{
+  "fixed_average": {
+    "mean_fidelity": 0.8532528030872345,
+    "std_fidelity": 0.14068131477657558,
+    "adapted": false
+  },
+  "domain_randomization": {
+    "mean_fidelity": 0.9740026462078094,
+    "std_fidelity": 0.014317504871205014,
+    "adapted": false
+  },
+  "worst_case": {
+    "mean_fidelity": 0.6682012689113617,
+    "std_fidelity": 0.21519164465228452,
+    "adapted": false
+  },
+  "meta_no_adapt": {
+    "mean_fidelity": 0.9176651537418365,
+    "std_fidelity": 0.08125044125880296,
+    "adapted": false
+  },
+  "meta_adapted": {
+    "mean_fidelity": 0.9355284023284912,
+    "std_fidelity": 0.06542091529655386,
+    "adapted": true,
+    "K": 5
+  }
+}

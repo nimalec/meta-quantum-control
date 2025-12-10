@@ -29,7 +29,7 @@ def infer_policy_architecture_from_checkpoint(
     Returns:
         arch_config: Dictionary with inferred architecture parameters
     """
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
     # Extract state dict
     if isinstance(checkpoint, dict) and 'policy_state_dict' in checkpoint:
@@ -122,7 +122,7 @@ def load_policy_from_checkpoint(
     ).to(device)
 
     # Load checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
     # Extract state dict
     if isinstance(checkpoint, dict) and 'policy_state_dict' in checkpoint:
