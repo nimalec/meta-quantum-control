@@ -102,7 +102,7 @@ def test_policy_to_simulation_gradient_flow():
     rho0 = torch.tensor([[1, 0], [0, 0]], dtype=torch.complex64)
     rho_final = sim(rho0, controls, T=1.0)
 
-    # Target state |+⟩
+    # Target state 
     ket_0 = np.array([1, 0])
     ket_1 = np.array([0, 1])
     ket_plus = (ket_0 + ket_1) / np.sqrt(2)
@@ -298,7 +298,6 @@ def main():
     """Run all gradient flow tests."""
     print("\n" + "#"*70)
     print("# DIFFERENTIABLE QUANTUM SIMULATION TEST SUITE")
-    print("# Critical for ICML Paper - Verifying Gradient Flow")
     print("#"*70)
 
     tests = [
@@ -336,7 +335,6 @@ def main():
     if passed == total:
         print(f"# ALL TESTS PASSED ({passed}/{total})")
         print("# GRADIENT FLOW IS WORKING!")
-        print("# Meta-learning can now properly train for ICML paper!")
     else:
         print(f"#  SOME TESTS FAILED ({passed}/{total} passed)")
         print("# Fix failing tests before running experiments!")
