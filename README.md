@@ -249,9 +249,6 @@ Where `compute_loss`:
 }
 ```
 
-## License
-
-MIT License - see LICENSE file for details.
 
 ## Contributing
 
