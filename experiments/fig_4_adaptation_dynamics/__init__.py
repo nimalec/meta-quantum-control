@@ -1,7 +1,7 @@
 """
-ICML Figure Generation Package
+Figure Generation Package
 
-Scripts to generate all figures for the ICML 2025 submission:
+Scripts to generate all figures: 
 "Meta-Reinforcement Learning for Quantum Control: A Framework for
 Quantifying Adaptation Gains under Noise Shifts"
 """
