@@ -1,24 +1,3 @@
-"""
-PSD → Lindblad (physics-correct), with task distribution.
-
-Assumptions:
-- PSD S(ω; θ) is TWO-SIDED in angular frequency ω [rad/s], units [xi^2 * s].
-- Coupling enters as energy: H_int = A * xi(t); pass A as g_energy_per_xi [J / xi].
-  Examples:
-    - Frequency noise δω(t) coupling as H_int = (ħ/2) δω σ_z  => g_energy_per_xi = ħ/2  [J·s · (rad/s)^-1]
-    - Magnetic field noise B(t) with H_int = (g_e μ_B / 2) B σ_z => g_energy_per_xi = g_e μ_B / 2  [J/T]
-
-Dephasing:
-  γ_φ(T, sequence) = χ(T)/T with χ(T) = (1/π ħ²) ∫₀^∞ dω [ (gE)² S(ω)/ω² ] |F(ωT)|
-
-Relaxation:
-  Γ↓ = (gE)²/ħ² * S_eff(ω₀), where S_eff(ω₀) = S(ω₀) (Golden rule)
-  or  S_eff = ∫ dω S(ω) L_Γ(ω-ω₀) for finite homogeneous linewidth Γ (normalized Lorentzian)
-
-Outputs:
-  Jump ops: √Γ↓ |g⟩⟨e|, √Γ↑ |e⟩⟨g|, √γ_φ σ_z/√2
-"""
-
 from __future__ import annotations
 import numpy as np
 from typing import Tuple, List, Dict
