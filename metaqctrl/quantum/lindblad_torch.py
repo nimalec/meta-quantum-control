@@ -30,10 +30,10 @@ class DifferentiableLindbladSimulator(nn.Module):
         H0: torch.Tensor,
         H_controls: List[torch.Tensor],
         L_operators: List[torch.Tensor],
-        dt: float = 0.005,  # FIXED: Reduced from 0.01 for better numerical stability
+        dt: float = 0.005,   
         method: str = 'rk4',
         device: torch.device = torch.device('cpu'),
-        max_control_amp: float = 10.0  # NEW: Maximum control amplitude for clipping
+        max_control_amp: float = 10.0   
     ):
         """
         Args:
