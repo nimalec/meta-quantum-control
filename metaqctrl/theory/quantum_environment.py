@@ -70,7 +70,7 @@ class QuantumEnvironment:
         # Cache for differentiable PyTorch simulators (keyed by task hash)
         self._torch_sim_cache = {}
 
-        # Initial state (|0⟩ for single qubit, |00⟩ for two qubit)
+
         self.rho0 = np.zeros((self.d, self.d), dtype=complex)
         self.rho0[0, 0] = 1.0
 
@@ -275,8 +275,7 @@ class QuantumEnvironment:
         from metaqctrl.quantum.gates import state_fidelity
 
         if self.target_unitary is None:
-            # Fallback: Use entanglement fidelity formula
-            # This is less accurate but doesn't require storing target unitary
+ 
             print("WARNING: target_unitary not provided. Using approximate fidelity.")
             print("         Set target_unitary in QuantumEnvironment for accurate process fidelity.")
 
@@ -313,7 +312,7 @@ class QuantumEnvironment:
         task_params: NoiseParameters,
         device: torch.device = torch.device('cpu')
     ) -> float:
-        """ Good.
+        """ 
         Evaluate policy on task.
 
         Args:
@@ -403,7 +402,7 @@ class QuantumEnvironment:
             dt: Integration time step (larger = faster but less accurate)
 
         Returns:
-            loss: FULLY DIFFERENTIABLE loss tensor with gradients!
+            loss: FULLY DIFFERENTIABLE loss tensor with gradient
         """
 
 
@@ -418,7 +417,7 @@ class QuantumEnvironment:
         controls = policy(task_features)  # (n_segments, n_controls)
 
 
-        # CRITICAL OPTIMIZATION: Get cached simulator instead of creating new one!
+
         sim = self.get_torch_simulator(task_params, device, dt=dt, use_rk4=use_rk4)
         
 
@@ -426,7 +425,6 @@ class QuantumEnvironment:
         rho0 = torch.zeros((self.d, self.d), dtype=torch.complex64, device=device)
         rho0[0, 0] = 1.0
 
-        # DIFFERENTIABLE quantum evolution!
         rho_final = sim(rho0, controls, self.T)
 
         # Target state (convert to torch)
@@ -445,7 +443,7 @@ class QuantumEnvironment:
         rho: torch.Tensor,
         sigma: torch.Tensor
     ) -> torch.Tensor:
-        """FIXED: Proper quantum fidelity for density matrices (differentiable).
+        """Proper quantum fidelity for density matrices (differentiable).
 
         F(ρ, σ) = Tr(ρσ) for pure states, approximated for mixed states
 
@@ -618,7 +616,6 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
         sigma_p = np.array([[0, 1], [0, 0]], dtype=complex)
 
         # System Hamiltonians
-        # FIXED: Use small non-zero drift for better dynamics
         drift_strength = config.get('drift_strength')
         H0 = drift_strength * sigma_z
         H_controls = [sigma_x, sigma_y]
@@ -630,9 +627,7 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
     else:
         raise ValueError(f"num_qubits={num_qubits} not supported. Use 1 or 2.")
 
-    # PSD model - NEW: Support for mixed models
-    # If config specifies multiple model_types, use dynamic model selection (psd_model=None)
-    # Otherwise, create fixed model for backward compatibility
+
     model_types = config.get('model_types')
     if model_types is None:
         # Single model mode (backward compatibility)
