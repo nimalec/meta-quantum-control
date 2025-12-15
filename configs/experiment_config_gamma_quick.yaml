@@ -1,0 +1,31 @@
+activation: tanh
+diversity_scale: 1.0
+first_order: true
+gamma_deph_range:
+- 0.02
+- 0.15
+gamma_relax_range:
+- 0.01
+- 0.08
+gate_time: 1.0
+hidden_dim: 128
+inner_lr: 0.01
+inner_steps: 5
+log_interval: 25
+meta_lr: 0.001
+n_controls: 2
+n_hidden_layers: 2
+n_iterations: 500
+n_query: 10
+n_segments: 60
+n_support: 10
+num_qubits: 1
+output_scale: 1.0
+save_dir: checkpoints_gamma
+seed: 42
+target_gate: pauli_x
+task_dist_type: uniform
+task_feature_dim: 3
+tasks_per_batch: 8
+val_interval: 50
+val_tasks: 20

@@ -14,23 +14,50 @@ class NoiseParameters:
     omega_c: float # cutoff [rad/s]
     model_type: str = 'one_over_f'  # PSD model type: 'one_over_f', 'lorentzian', 'double_exp'
 
-    def to_array(self, include_model: bool = False) -> np.ndarray:
+    # Default normalization ranges (typical experimental ranges)
+    ALPHA_RANGE = (0.1, 2.0)
+    A_RANGE = (0.01, 10.0)  # Note: spans 3 orders of magnitude
+    OMEGA_C_RANGE = (1.0, 300.0)
+
+    def to_array(self, include_model: bool = False, normalized: bool = False) -> np.ndarray:
         """
         Convert to array representation.
 
         Args:
             include_model: If True, encode model_type as 4th dimension.
                           Default False for backward compatibility.
+            normalized: If True, normalize features to ~[0, 1] range.
+                       Uses log-scale for A (amplitude) since it spans orders of magnitude.
+                       This improves gradient flow and optimizer stability.
 
         Returns:
             arr: Array [alpha, A, omega_c] or [alpha, A, omega_c, model_encoding]
+                 If normalized=True, values are scaled to roughly [0, 1].
         """
-        if include_model:
-            # Encode model type as numeric value
-            model_encoding = self._encode_model_type(self.model_type)
-            return np.array([self.alpha, self.A, self.omega_c, model_encoding], dtype=float)
+        if normalized:
+            # Normalize alpha: linear scale to [0, 1]
+            alpha_norm = (self.alpha - self.ALPHA_RANGE[0]) / (self.ALPHA_RANGE[1] - self.ALPHA_RANGE[0])
+
+            # Normalize A: log scale to [0, 1] (spans 3 orders of magnitude)
+            log_A = np.log10(np.clip(self.A, self.A_RANGE[0], self.A_RANGE[1]))
+            log_A_min, log_A_max = np.log10(self.A_RANGE[0]), np.log10(self.A_RANGE[1])
+            A_norm = (log_A - log_A_min) / (log_A_max - log_A_min)
+
+            # Normalize omega_c: linear scale to [0, 1]
+            omega_c_norm = (self.omega_c - self.OMEGA_C_RANGE[0]) / (self.OMEGA_C_RANGE[1] - self.OMEGA_C_RANGE[0])
+
+            if include_model:
+                model_encoding = self._encode_model_type(self.model_type) / 2.0  # normalize to [0, 1]
+                return np.array([alpha_norm, A_norm, omega_c_norm, model_encoding], dtype=float)
+            else:
+                return np.array([alpha_norm, A_norm, omega_c_norm], dtype=float)
         else:
-            return np.array([self.alpha, self.A, self.omega_c], dtype=float)
+            if include_model:
+                # Encode model type as numeric value
+                model_encoding = self._encode_model_type(self.model_type)
+                return np.array([self.alpha, self.A, self.omega_c, model_encoding], dtype=float)
+            else:
+                return np.array([self.alpha, self.A, self.omega_c], dtype=float)
 
     @staticmethod
     def _encode_model_type(model_type: str) -> float:

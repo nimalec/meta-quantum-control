@@ -429,8 +429,9 @@ class QuantumEnvironment:
         """
         # Task features - FIXED: Use as_tensor instead of tensor to avoid copying
         # This preserves gradient flow when using functional models (e.g., higher library)
+        # IMPORTANT: Use normalized=True for stable gradient flow (features scaled to ~[0,1])
 
-        task_params_array = task_params.to_array()
+        task_params_array = task_params.to_array(normalized=True)
         task_features = torch.as_tensor(
             task_params_array,
             dtype=torch.float32,

@@ -69,6 +69,7 @@ class MAML:
         
         # Logging
         self.meta_train_losses = []
+        self.meta_pre_adapt_losses = []  # Track pre-adaptation losses
         self.meta_val_losses = []
 
         # Warning flag for missing higher library
@@ -393,6 +394,9 @@ class MAML:
         }
 
         self.meta_train_losses.append(meta_loss)  # Already a Python float
+        # Also track pre-adaptation loss
+        pre_adapt_loss = np.mean(task_pre_adapt_losses) if task_pre_adapt_losses else float('nan')
+        self.meta_pre_adapt_losses.append(pre_adapt_loss)
 
         return metrics
     
@@ -459,6 +463,7 @@ class MAML:
             'inner_lr': self.inner_lr,
             'inner_steps': self.inner_steps,
             'meta_train_losses': self.meta_train_losses,
+            'meta_pre_adapt_losses': self.meta_pre_adapt_losses,
             'meta_val_losses': self.meta_val_losses,
             **kwargs
         }
@@ -481,6 +486,7 @@ class MAML:
         self.inner_lr = checkpoint['inner_lr']
         self.inner_steps = checkpoint['inner_steps']
         self.meta_train_losses = checkpoint.get('meta_train_losses', [])
+        self.meta_pre_adapt_losses = checkpoint.get('meta_pre_adapt_losses', [])
         self.meta_val_losses = checkpoint.get('meta_val_losses', [])
         
         epoch = checkpoint['epoch']
