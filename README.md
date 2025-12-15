@@ -228,11 +228,3 @@ Where `compute_loss`:
 }
 ```
 
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/improvement`)
-3. Run tests (`make test`)
-4. Submit a pull request
-
