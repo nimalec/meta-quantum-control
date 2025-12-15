@@ -1,12 +1,15 @@
 # Meta-Reinforcement Learning for Adaptive Quantum Control
-Author: Nima Leclerc (nleclerc@mitre.org)-- Quantum Research Scientist at MITRE
+Author: Nima Leclerc (nleclerc@mitre.org) -- Quantum Research Scientist at MITRE
 
 A research implementation of first-order Model-Agnostic Meta-Learning (MAML) for quantum state control under noise. This framework trains a meta-learned policy initialization that rapidly adapts to new quantum noise environments with minimal gradient steps.
 
 ## Overview
 
-This project combines meta-reinforcement learning with quantum control theory, enabling control policies to adapt quickly to different colored noise profiles (1/f, Lorentzian, etc.) by leveraging task-specific structure. The key innovation is a fully differentiable Lindblad master equation simulator that allows end-to-end gradient-based meta learned optimization of optimal pulse sequences to calculate an "adaptation gap" quantity.   
+This project combines meta-reinforcement learning with quantum control theory, enabling control policies to adapt quickly to different noise profiles by leveraging task-specific structure. The key innovation is a fully differentiable Lindblad master equation simulator that allows end-to-end gradient-based meta-learned optimization of optimal pulse sequences.
 
+The framework supports two noise parameterizations:
+- **PSD-based**: Colored noise via power spectral density (1/f, Lorentzian, etc.)
+- **Gamma-rate**: Direct Lindblad decoherence rates (γ_deph, γ_relax)
 
 ## Project Structure
 
@@ -15,12 +18,15 @@ meta-quantum-control/
 ├── metaqctrl/                    # Main package
 │   ├── meta_rl/                  # Meta-learning algorithms
 │   │   ├── maml.py               # MAML implementation
-│   │   └── policy.py             # Neural network policies
+│   │   ├── maml_gamma.py         # Gamma-parameterized MAML
+│   │   ├── policy.py             # Neural network policies (PSD)
+│   │   └── policy_gamma.py       # Gamma-parameterized policies
 │   ├── quantum/                  # Quantum simulation
 │   │   ├── lindblad.py           # NumPy Lindblad simulator
 │   │   ├── lindblad_torch.py     # Differentiable PyTorch simulator
 │   │   ├── gates.py              # Fidelity computation
 │   │   ├── noise_models_v2.py    # Noise PSD models
+│   │   ├── noise_models_gamma.py # Gamma-rate noise models
 │   │   └── noise_adapter.py      # PSD to Lindblad conversion
 │   ├── theory/                   # Theoretical analysis
 │   │   ├── quantum_environment.py    # Unified simulation interface
@@ -30,8 +36,16 @@ meta-quantum-control/
 │       ├── checkpoint_utils.py   # Model saving/loading
 │       └── plot_training.py      # Visualization
 ├── experiments/                  # Reproducible experiment scripts
+│   ├── fig_3_adaptation_gap_analysis/
+│   ├── fig_4_adaptation_dynamics/
+│   ├── fig_5_meta_training/
+│   ├── fig_task_variance_correlation/
+│   └── figs_appendix_ablations/
 ├── configs/                      # Configuration files
+│   ├── experiment_config.yaml         # PSD-based config
+│   └── experiment_config_gamma.yaml   # Gamma-rate config
 ├── checkpoints/                  # Saved model weights
+│   └── checkpoints_gamma/        # Gamma-trained checkpoints
 └── tests/                        # Unit tests
 ```
 
@@ -52,7 +66,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 ### Setup
 
 ```bash
-# Clone the repository 
+# Clone the repository
 cd meta-quantum-control
 
 # Install dependencies
@@ -76,89 +90,107 @@ Core dependencies (automatically installed):
 
 ## Quick Start
 
-### Training a Meta-Policy
+### Training a Gamma-Parameterized Meta-Policy (Recommended)
 
 ```bash
 cd experiments/fig_5_meta_training
-python train_meta.py --config ../../configs/experiment_config.yaml
+python train_meta_gamma.py --config ../../configs/experiment_config_gamma.yaml
 ```
 
 This will:
-1. Train a FOMAML policy for single-qubit quantum control
-2. Save checkpoints to `checkpoints/`
-3. Log training metrics to `checkpoints/training_history.json`
+1. Train a FOMAML policy for single-qubit X-gate control under Lindblad decoherence
+2. Save checkpoints to `checkpoints_gamma/`
+3. Log training metrics to `checkpoints_gamma/training_history.json`
 4. Display training progress with pre/post-adaptation validation metrics
 
 ### Evaluating a Trained Policy
 
 ```python
 from metaqctrl.utils.checkpoint_utils import load_policy_from_checkpoint
-from metaqctrl.theory.quantum_environment import QuantumEnvironment
+from metaqctrl.quantum.lindblad_torch import DifferentiableLindbladSimulator
+import torch
 
-# Load trained policy
-policy = load_policy_from_checkpoint("checkpoints/best_policy.pt")
+# Load trained gamma-parameterized policy
+policy = load_policy_from_checkpoint("checkpoints/checkpoints_gamma/maml_gamma_pauli_x.pt")
 
-# Create environment with specific noise parameters
-env = QuantumEnvironment(
-    alpha=1.0,      # Spectral exponent
-    A=0.1,          # Noise amplitude
-    omega_c=50.0    # Cutoff frequency
-)
+# Create task features: [gamma_deph/0.1, gamma_relax/0.05, sum/0.15]
+gamma_deph, gamma_relax = 0.10, 0.05
+task_features = torch.tensor([[
+    gamma_deph / 0.1,
+    gamma_relax / 0.05,
+    (gamma_deph + gamma_relax) / 0.15
+]])
 
-# Generate control pulses and evaluate
-task_features = torch.tensor([[1.0, 0.1, 50.0]])
+# Generate control pulses
 controls = policy(task_features)
-fidelity = env.evaluate_controls(controls)
+print(f"Control shape: {controls.shape}")  # [1, n_segments, 2]
+```
+
+### Generating Training Curve Figures
+
+```bash
+python experiments/fig_5_meta_training/generate_training_curve_figure.py \
+    --history checkpoints/checkpoints_gamma/training_history.json \
+    --sigma 5
 ```
 
 ## Configuration
 
-Edit `configs/experiment_config.yaml` to customize training:
+### Gamma-Rate Configuration (`configs/experiment_config_gamma.yaml`)
 
 ```yaml
 # Random seed for reproducibility
 seed: 42
 
 # Quantum System
-psd_model: 'one_over_f'       # Noise model: 'one_over_f', 'lorentzian', 'double_exp'
-horizon: 1                     # Evolution time (arbitrary units)
-target_gate: 'pauli_x'         # Target: 'pauli_x', 'pauli_y', 'hadamard'
+horizon: 1.0                      # Evolution time
+target_gate: 'pauli_x'            # Target: 'pauli_x', 'pauli_y', 'hadamard'
 num_qubits: 1
 
-# Task Distribution (noise parameter ranges)
+# Gamma Task Distribution (decoherence rates)
+gamma_deph_range: [0.02, 0.15]    # Dephasing rate range
+gamma_relax_range: [0.01, 0.08]   # Relaxation rate range
 task_dist_type: 'uniform'
-alpha_range: [0.1, 2.0]        # Spectral exponent range
-A_range: [0.01, 10.0]          # Noise amplitude range
-omega_c_range: [1.0, 300.0]    # Cutoff frequency range
 
 # Policy Network Architecture
-task_feature_dim: 3            # Input: (alpha, A, omega_c)
-hidden_dim: 128
+task_feature_dim: 3               # Input: normalized gamma features
+hidden_dim: 64
 n_hidden_layers: 2
-n_segments: 60                 # Number of pulse segments
-n_controls: 2                  # X and Y control channels
+n_segments: 20                    # Number of pulse segments
+n_controls: 2                     # X and Y control channels
 activation: 'tanh'
 
 # MAML Hyperparameters
-inner_lr: 0.01                 # Inner loop learning rate
-inner_steps: 5                 # Adaptation steps (K)
-meta_lr: 0.001                 # Meta learning rate
-first_order: true              # Use FOMAML (recommended)
+inner_lr: 0.01                    # Inner loop learning rate
+inner_steps: 5                    # Adaptation steps (K)
+meta_lr: 0.001                    # Meta learning rate
+first_order: true                 # Use FOMAML (recommended)
 
 # Training
 n_iterations: 2000
-tasks_per_batch: 32
-n_support: 10                  # Support set size per task
-n_query: 10                    # Query set size per task
+tasks_per_batch: 8
 val_interval: 10
 val_tasks: 20
 
-# Quantum Simulation
-dt_training: 0.01              # Integration time step
-use_rk4_training: true         # Use RK4 (recommended for stability)
-
 # Checkpointing
-save_dir: 'checkpoints'
+save_dir: 'checkpoints_gamma'
+```
+
+### PSD-Based Configuration (`configs/experiment_config.yaml`)
+
+```yaml
+# Quantum System
+psd_model: 'one_over_f'           # Noise model: 'one_over_f', 'lorentzian'
+
+# Task Distribution (noise parameter ranges)
+alpha_range: [0.1, 2.0]           # Spectral exponent range
+A_range: [0.01, 10.0]             # Noise amplitude range
+omega_c_range: [1.0, 300.0]       # Cutoff frequency range
+
+# Policy Network Architecture
+task_feature_dim: 3               # Input: (alpha, A, omega_c)
+hidden_dim: 128
+n_segments: 60
 ```
 
 ## Reproducing Paper Figures
@@ -171,19 +203,96 @@ All experiments are organized by figure number. Each script uses fixed random se
 |--------|--------|-------------|
 | Fig. 1 | `experiments/fig_1_overview/fig1.py` | System overview schematic |
 | Fig. 2 | `experiments/fig_2_lemma_validation/lemma_validation.py` | Theoretical lemma validation |
-| Fig. 3 | `experiments/fig_3_adaptation_gap_analysis/generate_adaptation_gap_figure.py` | Adaptation gap analysis |
-| Fig. 4 | `experiments/fig_4_adaptation_dynamics/adapt_plots/adaptation_dynamics_figure.py` | Adaptation dynamics over K steps |
-| Fig. 5 | `experiments/fig_5_meta_training/train_meta.py` | Meta-training results |
+| Fig. 3 | `experiments/fig_3_adaptation_gap_analysis/generate_adaptation_gap_figure_gamma_checkpoint.py` | Adaptation gap analysis (exponential saturation + task diversity scaling) |
+| Fig. 3 (alt) | `experiments/fig_3_adaptation_gap_analysis/generate_adaptation_gap_figure_actual_variance.py` | Adaptation gap with actual task variance |
+| Fig. 4 | `experiments/fig_4_adaptation_dynamics/adaptation_dynamics_figure_gamma_checkpoint.py` | Adaptation dynamics over K steps |
+| Fig. 5 | `experiments/fig_5_meta_training/train_meta_gamma.py` | Meta-training results |
 
 ### Appendix Figures
 
 | Figure | Script | Description |
 |--------|--------|-------------|
 | Fig. A1-A2 | `experiments/figs_appendix_classical/fig_a1_a2_lqr.py` | Classical LQR baseline |
-| Fig. A3 | `experiments/figs_appendix_ablations/fig_a3_adaptation_lr/generate_lr_sensitivity_figure.py` | Inner learning rate sensitivity |
-| Fig. A4 | `experiments/figs_appendix_ablations/fig_a4_adaptation_steps/generate_adaptation_steps_figure.py` | Adaptation steps (K) analysis |
-| Fig. A5 | `experiments/figs_appendix_ablations/fig_a5_baselines/generate_baseline_comparison_figure.py` | Baseline comparisons |
+| Fig. A3 | `experiments/figs_appendix_ablations/fig_a3_adaptation_lr/generate_lr_sensitivity_figure_gamma_checkpoint.py` | Inner learning rate sensitivity |
+| Fig. A4 | `experiments/figs_appendix_ablations/fig_a4_adaptation_steps/generate_adaptation_steps_figure_gamma_checkpoint.py` | Adaptation steps (K) analysis |
+| Fig. A5 | `experiments/figs_appendix_ablations/fig_a5_baselines/generate_baseline_comparison_gamma_checkpoint.py` | Baseline comparisons (MAML vs Fixed Avg) |
 
+### Supplementary Analysis
+
+| Analysis | Script | Description |
+|----------|--------|-------------|
+| Task Variance | `experiments/fig_task_variance_correlation/generate_task_variance_figure.py` | Task variance vs loss variance correlation |
+
+### Running Figure Generation Scripts
+
+```bash
+# Set environment variable to avoid OpenMP conflicts (macOS)
+export KMP_DUPLICATE_LIB_OK=TRUE
+
+# Figure 3: Adaptation Gap Analysis
+python -u experiments/fig_3_adaptation_gap_analysis/generate_adaptation_gap_figure_gamma_checkpoint.py \
+    --checkpoint checkpoints/checkpoints_gamma/maml_gamma_pauli_x.pt \
+    --n_tasks 60 --max_K 30 --inner_lr 0.0001
+
+# Figure 3 (with actual variance):
+python -u experiments/fig_3_adaptation_gap_analysis/generate_adaptation_gap_figure_actual_variance.py \
+    --checkpoint checkpoints/checkpoints_gamma/maml_gamma_pauli_x.pt \
+    --n_tasks 60 --max_K 30 --inner_lr 0.0001
+
+# Figure 4: Adaptation Dynamics
+python -u experiments/fig_4_adaptation_dynamics/adaptation_dynamics_figure_gamma_checkpoint.py \
+    --checkpoint checkpoints/checkpoints_gamma/maml_gamma_pauli_x.pt \
+    --max_K 50 --n_tasks 50 --K_adapt 50 --inner_lr 0.001 \
+    --ood_gamma_deph 0.30 --ood_gamma_relax 0.16
+
+# Figure A3: LR Sensitivity
+python -u experiments/figs_appendix_ablations/fig_a3_adaptation_lr/generate_lr_sensitivity_figure_gamma_checkpoint.py \
+    --n_tasks 30 --max_K 25
+
+# Figure A5: Baseline Comparison
+python -u experiments/figs_appendix_ablations/fig_a5_baselines/generate_baseline_comparison_gamma_checkpoint.py \
+    --n_tasks 50 --K_adapt 1 --inner_lr 0.001 --diverse
+
+# Task Variance Correlation
+python -u experiments/fig_task_variance_correlation/generate_task_variance_figure.py \
+    --n_tasks 50 --n_spread_levels 15
+```
+
+## Key Results
+
+### Adaptation Gap Scaling Laws
+
+The adaptation gap G_K follows an exponential saturation:
+
+```
+G_K = c × (1 - exp(-β × K))
+```
+
+Where:
+- `c` is the asymptotic gap (task-dependent)
+- `β` is the adaptation rate (depends on inner learning rate)
+- `K` is the number of adaptation steps
+
+**Empirical Results:**
+- Panel (a): c ≈ 0.006, β ≈ 0.18, R² = 0.99
+- Panel (b): G_∞ scales linearly with task variance σ²_τ, R² = 0.94
+
+### Baseline Comparison (K=1 adaptation)
+
+| Method | K=0 Fidelity | K=1 Fidelity | Improvement |
+|--------|--------------|--------------|-------------|
+| MAML | 91.80% | 93.25% | +1.45% |
+| Fixed Avg | 73.94% | 81.39% | +7.45% |
+
+**MAML advantage at K=1: +11.86%** (93.25% vs 81.39%)
+
+### Training Results
+
+| Checkpoint | Iterations | Best Fidelity |
+|------------|------------|---------------|
+| v2 | 300 | 97.84% ± 0.51% |
+| v3 | 700 | 98.92% ± 0.26% |
+| v4 | 2000 | 99.23% ± 0.16% |
 
 ## Algorithm Overview
 
@@ -213,10 +322,35 @@ for iteration in 1..N:
 
 Where `compute_loss`:
 1. Generates control pulses from policy
-2. Simulates Lindblad dynamics with noise
+2. Simulates Lindblad dynamics with decoherence
 3. Computes gate fidelity
 4. Returns `loss = 1 - fidelity`
 
+## Two Task Parameterizations
+
+### Gamma-Rate Parameterization (Recommended)
+
+Tasks are parameterized by direct Lindblad decoherence rates:
+- `γ_deph`: Dephasing rate (T2* decay)
+- `γ_relax`: Relaxation rate (T1 decay)
+
+Task features are normalized: `[γ_deph/0.1, γ_relax/0.05, (γ_deph+γ_relax)/0.15]`
+
+**Advantages:**
+- Direct physical interpretation
+- Simpler task distribution
+- Better for out-of-distribution generalization
+
+### PSD-Based Parameterization
+
+Tasks are parameterized by noise power spectral density:
+- `α`: Spectral exponent (1/f^α noise)
+- `A`: Noise amplitude
+- `ω_c`: Cutoff frequency
+
+Task features: `[α, A, ω_c]`
+
+**Use case:** When studying colored noise with specific spectral properties.
 
 ## Citation
 
@@ -227,4 +361,3 @@ Where `compute_loss`:
   year={2025}
 }
 ```
-
