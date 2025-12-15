@@ -9,7 +9,7 @@ This project combines meta-reinforcement learning with quantum control theory, e
 
 ### Key Features
 
-- **MAML Implementation**: First-order (FOMAML) and second-order MAML for quantum control
+- **MAML Implementation**: First-order and MAML for quantum control
 - **Differentiable Quantum Simulation**: PyTorch-based Lindblad simulator with full gradient flow
 - **Noise Models**: Support for 1/f, Lorentzian, and double-exponential noise power spectral densities
 - **Theoretical Analysis**: Optimality gap computation and spectral gap analysis tools
