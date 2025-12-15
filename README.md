@@ -1,4 +1,5 @@
 # Meta-Reinforcement Learning for Adaptive Quantum Control
+Author: Nima Leclerc (nleclerc@mitre.org)-- Quantum Research Scientist at MITRE
 
 A research implementation of Model-Agnostic Meta-Learning (MAML) for quantum state control under colored noise. This framework trains a meta-learned policy initialization that rapidly adapts to new quantum noise environments with minimal gradient steps.
 
@@ -249,9 +250,6 @@ Where `compute_loss`:
 }
 ```
 
-## License
-
-MIT License - see LICENSE file for details.
 
 ## Contributing
 
