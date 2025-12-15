@@ -8,8 +8,6 @@ Key differences from policy.py:
 - Input normalization designed for gamma rates
 - Use with GammaNoiseParameters from noise_models_gamma.py
 
-This is a backup of policy.py adapted for gamma-rate noise parameterization.
-The original policy.py uses PSD features [alpha, A, omega_c].
 """
 
 import torch
@@ -108,7 +106,6 @@ class GammaPulsePolicy(nn.Module):
 
         Args:
             task_features: (batch_size, task_feature_dim) or (task_feature_dim,)
-                           Expected: [γ_deph/0.1, γ_relax/0.05, sum/0.15]
 
         Returns:
             controls: (batch_size, n_segments, n_controls) or (n_segments, n_controls)
@@ -264,8 +261,7 @@ if __name__ == "__main__":
     print(f"\nPolicy architecture:\n{policy}")
     print(f"\nTotal parameters: {policy.count_parameters():,}")
 
-    # Test forward pass with gamma features
-    # Gamma features: [γ_deph/0.1, γ_relax/0.05, sum/0.15]
+    # Test forward pass with gamma features 
     gamma_deph = 0.05  # Typical dephasing rate
     gamma_relax = 0.025  # Typical relaxation rate
     task_features = torch.tensor([
