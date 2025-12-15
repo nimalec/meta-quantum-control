@@ -190,7 +190,6 @@ class QuantumEnvironment:
         if key not in self._torch_sim_cache:
             # Get Lindblad operators
             L_ops_numpy = self.psd_to_lindblad.get_lindblad_operators(task_params)
-    #        print("🚀", L_ops_numpy)
 
             # Convert system to PyTorch tensors
             H0_torch = numpy_to_torch_complex(self.H0, device)
@@ -408,14 +407,7 @@ class QuantumEnvironment:
         use_rk4: bool = True,
         dt: float = 0.01
     ) -> torch.Tensor:
-        """ Good: OK... this is the differentiable version that propogates gradients.
-        Compute loss (infidelity) with FULL gradient support through quantum simulation.
-
-        This is the NEW differentiable version that allows gradients to flow through
-        the entire quantum dynamics. Use this for proper meta-learning!
-
-        PERFORMANCE OPTIMIZED: Now uses cached simulators to avoid recreating them
-        on every call. This is crucial for GPU performance!
+        """ 
 
         Args:
             policy: Policy network
@@ -486,15 +478,10 @@ class QuantumEnvironment:
         Returns:
             fidelity: Real-valued fidelity in [0, 1]
         """
-        # Simplified fidelity: F ≈ Tr(ρσ)² as approximation
-        # For pure states, F = |⟨ψ|φ⟩|² = |Tr(ρσ)|² exactly
-        # For mixed states, this is an approximation but avoids eigh
 
         trace_prod = torch.trace(rho @ sigma)
 
-        # CRITICAL FIX: Use torch.abs() which maintains gradients!
-        # torch.abs() for complex tensors computes |z|² = real² + imag²
-        # and properly backpropagates through both components
+
         fidelity = torch.abs(trace_prod) ** 2
 
         # Clamp to valid range [0, 1]
