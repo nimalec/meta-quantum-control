@@ -349,19 +349,7 @@ class QuantumEnvironment:
         task_params: NoiseParameters,
         device: torch.device = torch.device('cpu')
     ) -> torch.Tensor:
-        """ Take a look ==> which function is replacing it.
-        Compute loss (infidelity) with gradient support.
-
-        WARNING: This implementation is NOT fully differentiable because the quantum
-        simulation happens in numpy. For proper gradient flow through the quantum
-        dynamics, you need:
-        1. JAX-based differentiable quantum simulator, OR
-        2. PyTorch-based quantum simulator, OR
-        3. Analytical gradients via adjoint method
-
-        Current behavior: Gradients flow through the policy network but NOT through
-        the quantum simulation. This works for zeroth-order optimization and
-        finite-difference based MAML, but not for full second-order MAML.
+        """ 
 
         Args:
             policy: Policy network
@@ -381,8 +369,6 @@ class QuantumEnvironment:
         # Generate controls
         controls = policy(task_features)
 
-        # NOTE: detach() breaks gradient flow through quantum simulation
-        # For full differentiability, need JAX or PyTorch quantum simulator
         controls_np = controls.detach().cpu().numpy()
 
         # Evaluate fidelity (non-differentiable step)
@@ -419,9 +405,7 @@ class QuantumEnvironment:
         Returns:
             loss: FULLY DIFFERENTIABLE loss tensor with gradients!
         """
-        # Task features - FIXED: Use as_tensor instead of tensor to avoid copying
-        # This preserves gradient flow when using functional models (e.g., higher library)
-        # IMPORTANT: Use normalized=True for stable gradient flow (features scaled to ~[0,1])
+
 
         task_params_array = task_params.to_array(normalized=True)
         task_features = torch.as_tensor(
@@ -642,28 +626,6 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
         # Noise basis operators
         basis_operators = [sigma_p, sigma_z]
 
-    elif num_qubits == 2:
-        # 2-qubit system (NEW)
-        from metaqctrl.quantum.two_qubit_gates import (
-            get_two_qubit_control_hamiltonians,
-            get_two_qubit_noise_operators,
-            single_qubit_on_two_qubit
-        )
-
-        # CRITICAL FIX: Use proper 2-qubit control Hamiltonians
-        # These include entangling ZZ interaction needed for CNOT
-        H_controls = get_two_qubit_control_hamiltonians()  # [XI, IX, YI, ZZ]
-
-        # CRITICAL FIX: Non-zero drift Hamiltonian for 2-qubit
-        # Use ZZ interaction as drift (common in superconducting qubits)
-        drift_strength = config.get('drift_strength')  # Stronger for 2-qubit
-        I = np.eye(2, dtype=complex)
-        Z = np.array([[1, 0], [0, -1]], dtype=complex)
-        ZZ = np.kron(Z, Z)  # ZZ interaction
-        H0 = drift_strength * ZZ
-
-        # Get noise operators for both qubits
-        basis_operators = get_two_qubit_noise_operators(qubit=None)  # Both qubits
 
     else:
         raise ValueError(f"num_qubits={num_qubits} not supported. Use 1 or 2.")
