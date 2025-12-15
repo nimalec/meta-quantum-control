@@ -34,7 +34,7 @@ class GammaPulsePolicy(nn.Module):
 
     def __init__(
         self,
-        task_feature_dim: int = 3,  # (γ_deph/0.1, γ_relax/0.05, sum/0.15)
+        task_feature_dim: int = 3,
         hidden_dim: int = 128,
         n_hidden_layers: int = 2,
         n_segments: int = 20,
@@ -131,7 +131,7 @@ class GammaPulsePolicy(nn.Module):
     def get_lipschitz_constant(self) -> float:
         """
         Estimate Lipschitz constant L_net via spectral norms.
-        L_net ≤ ∏ℓ ||Wℓ||₂
+
         """
         lipschitz = 1.0
         for module in self.modules():
@@ -170,7 +170,7 @@ class GammaTaskFeatureEncoder(nn.Module):
         self.use_fourier = use_fourier
 
         if use_fourier:
-            # Random Fourier features: φ(x) = [cos(Bx), sin(Bx)]
+            # Random Fourier features
             self.register_buffer(
                 'B',
                 torch.randn(raw_dim, feature_dim // 2) * fourier_scale
@@ -238,7 +238,6 @@ def create_gamma_policy(
     return policy
 
 
-# For backward compatibility - alias to original name
 PulsePolicy = GammaPulsePolicy
 
 
