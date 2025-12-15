@@ -81,7 +81,7 @@ class DifferentiableLindbladSimulator(nn.Module):
         Returns:
             drho_dt: Time derivative (d x d) complex tensor
         """
-        # NEW: Clip control amplitudes for numerical stability
+
         u = torch.clamp(u, -self.max_control_amp, self.max_control_amp)
 
         # Build total Hamiltonian: H_total = H₀ + Σₖ uₖ Hₖ
@@ -209,39 +209,6 @@ class DifferentiableLindbladSimulator(nn.Module):
                 else:
                     raise ValueError(f"Unknown method: {self.method}")
 
-                # FIXED: Normalize EVERY substep for better stability
-                # if normalize:
-                #     trace = torch.trace(rho).real
-                #     if trace < 1e-10:
-                #         print(f"WARNING [Simulator]: Trace collapsed to {trace.item():.2e} - using fallback")
-                #         # Instead of dividing by near-zero, use gradient-preserving fallback
-                #         # Reset rho but keep it differentiable by scaling with trace
-                #         rho = rho / (trace + 1e-10)
-                #     else:
-                #         rho = rho / trace
-
-                #     # CRITICAL FIX: Better NaN/Inf handling that maintains gradients
-                #     has_nan_inf = torch.isnan(rho).any() or torch.isinf(rho).any()
-                #     if has_nan_inf:
-                #         print(f"WARNING [Simulator]: NaN/Inf detected in density matrix")
-                #         # Replace NaN/Inf values with zeros while maintaining gradient flow
-                #         # This is better than resetting to rho0 which breaks gradients
-                #         rho = torch.where(
-                #             torch.isnan(rho) | torch.isinf(rho),
-                #             torch.zeros_like(rho),
-                #             rho
-                #         )
-                #         # Renormalize after fixing NaN/Inf
-                #         trace = torch.trace(rho).real
-                #         if trace > 1e-10:
-                #             rho = rho / trace
-                #         else:
-                #             print(f"WARNING [Simulator]: Trace still collapsed after NaN/Inf fix - using identity")
-                #             # CRITICAL: This creates a constant tensor with NO gradients!
-                #             # This will break gradient flow and cause MAML to fail!
-                #             # TODO: Find a better fallback that maintains gradients
-                #             rho = torch.eye(self.d, dtype=torch.complex64, device=self.device) / self.d
-                # FIXED: Normalize EVERY substep for better stability
                 if normalize:
                     trace = torch.trace(rho).real
                     if trace > 1e-10:  # Avoid division by zero
@@ -253,17 +220,13 @@ class DifferentiableLindbladSimulator(nn.Module):
                             trajectory.append(rho.clone())
                         return rho, (torch.stack(trajectory) if return_trajectory else None)
 
-                    # FIXED: Better NaN/Inf handling - reset but don't stop
                     if torch.isnan(rho).any() or torch.isinf(rho).any():
                         # Reset to initial state (maintains gradient flow better)
                         rho = rho0.clone()
-                        # Continue integration to allow gradient signal
-                        # (stopping abruptly breaks autodiff)
+
 
             if return_trajectory:
                 trajectory.append(rho.clone())
-
-        # NEW: Final renormalization (always normalize at end)
         trace_final = torch.trace(rho).real
         if trace_final > 1e-10:
             rho = rho / trace_final
