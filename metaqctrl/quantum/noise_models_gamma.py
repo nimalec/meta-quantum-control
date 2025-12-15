@@ -1,18 +1,5 @@
 """
 Gamma-Rate Noise Models for Quantum Control
-
-This module provides Markovian noise parameterization using direct decay rates
-(gamma_deph, gamma_relax) instead of PSD parameters (alpha, A, omega_c).
-
-Key differences from noise_models_v2.py:
-- Direct Lindblad rates: no PSD-to-rate conversion needed
-- Simpler task features: 3D [gamma_deph/0.1, gamma_relax/0.05, sum/0.15]
-- Standard Lindblad master equation (Markovian limit)
-
-Use this for:
-- Experiments where Markovian noise is appropriate
-- Faster simulation (no PSD integration)
-- Compatibility with gamma-trained policies
 """
 
 from __future__ import annotations

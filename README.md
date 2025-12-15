@@ -1,19 +1,12 @@
 # Meta-Reinforcement Learning for Adaptive Quantum Control
 Author: Nima Leclerc (nleclerc@mitre.org)-- Quantum Research Scientist at MITRE
 
-A research implementation of Model-Agnostic Meta-Learning (MAML) for quantum state control under colored noise. This framework trains a meta-learned policy initialization that rapidly adapts to new quantum noise environments with minimal gradient steps.
+A research implementation of first-order Model-Agnostic Meta-Learning (MAML) for quantum state control under noise. This framework trains a meta-learned policy initialization that rapidly adapts to new quantum noise environments with minimal gradient steps.
 
 ## Overview
 
-This project combines meta-reinforcement learning with quantum control theory, enabling control policies to adapt quickly to different colored noise profiles (1/f, Lorentzian, etc.) by leveraging task-specific structure. The key innovation is a fully differentiable Lindblad master equation simulator that allows end-to-end gradient-based optimization.
+This project combines meta-reinforcement learning with quantum control theory, enabling control policies to adapt quickly to different colored noise profiles (1/f, Lorentzian, etc.) by leveraging task-specific structure. The key innovation is a fully differentiable Lindblad master equation simulator that allows end-to-end gradient-based meta learned optimization of optimal pulse sequences to calculate an "adaptation gap" quantity.   
 
-### Key Features
-
-- **MAML Implementation**: First-order and MAML for quantum control
-- **Differentiable Quantum Simulation**: PyTorch-based Lindblad simulator with full gradient flow
-- **Noise Models**: Support for 1/f, Lorentzian, and double-exponential noise power spectral densities
-- **Theoretical Analysis**: Optimality gap computation and spectral gap analysis tools
-- **Reproducible Experiments**: Scripts for all paper figures with fixed random seeds
 
 ## Project Structure
 
@@ -191,21 +184,6 @@ All experiments are organized by figure number. Each script uses fixed random se
 | Fig. A4 | `experiments/figs_appendix_ablations/fig_a4_adaptation_steps/generate_adaptation_steps_figure.py` | Adaptation steps (K) analysis |
 | Fig. A5 | `experiments/figs_appendix_ablations/fig_a5_baselines/generate_baseline_comparison_figure.py` | Baseline comparisons |
 
-### Running All Experiments
-
-```bash
-# Meta-training (main result)
-cd experiments/fig_5_meta_training
-python train_meta.py --config ../../configs/experiment_config.yaml
-
-# Adaptation gap analysis
-cd ../fig_3_adaptation_gap_analysis
-python generate_adaptation_gap_figure.py
-
-# Ablation: inner learning rate
-cd ../figs_appendix_ablations/fig_a3_adaptation_lr
-python generate_lr_sensitivity_figure.py
-```
 
 ## Algorithm Overview
 

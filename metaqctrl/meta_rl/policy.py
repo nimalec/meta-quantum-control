@@ -11,7 +11,7 @@ from typing import Tuple, Optional
 
 
 class PulsePolicy(nn.Module):
-    """ Good. 
+    """  
     Neural network policy that outputs control pulse sequences.
     
     Architecture:
@@ -39,7 +39,7 @@ class PulsePolicy(nn.Module):
             activation: 'tanh', 'relu', 'elu'
         """
         super().__init__()
-        #Good 
+
         self.task_feature_dim = task_feature_dim
         self.hidden_dim = hidden_dim
         self.n_segments = n_segments
@@ -68,7 +68,7 @@ class PulsePolicy(nn.Module):
         self._init_weights()
     
     def _get_activation(self, name: str) -> nn.Module:
-        """Good. 
+        """ 
         Get activation function."""
         if name == 'tanh':
             return nn.Tanh()
@@ -80,7 +80,7 @@ class PulsePolicy(nn.Module):
             raise ValueError(f"Unknown activation: {name}")
     
     def _init_weights(self):
-        """Good. 
+        """ 
         Initialize network weights."""
         for m in self.modules():
             if isinstance(m, nn.Linear):
@@ -89,7 +89,7 @@ class PulsePolicy(nn.Module):
                     nn.init.constant_(m.bias, 0.0)
     
     def forward(self, task_features: torch.Tensor) -> torch.Tensor:
-        """Good. 
+        """
         Generate control pulses for given task.
         
         Args:
@@ -119,7 +119,7 @@ class PulsePolicy(nn.Module):
     def get_lipschitz_constant(self) -> float:
         """ Good. 
         Estimate Lipschitz constant L_net via spectral norms.
-        L_net ≤ ∏ℓ ||Wℓ||₂
+        
         """
         lipschitz = 1.0
         for module in self.modules():
@@ -138,7 +138,7 @@ class PulsePolicy(nn.Module):
 
 
 class TaskFeatureEncoder(nn.Module):
-    """Good. 
+    """
     Optional: Learn task representations from raw noise parameters.
     
     Can include:
@@ -180,7 +180,7 @@ class TaskFeatureEncoder(nn.Module):
         self.output_dim = final_dim
     
     def forward(self, raw_features: torch.Tensor) -> torch.Tensor:
-        """Good. Takes in raw features --> outputs encoded features 
+        """
         Encode raw task parameters.
         
         Args:

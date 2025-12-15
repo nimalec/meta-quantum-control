@@ -8,8 +8,6 @@ Key differences from policy.py:
 - Input normalization designed for gamma rates
 - Use with GammaNoiseParameters from noise_models_gamma.py
 
-This is a backup of policy.py adapted for gamma-rate noise parameterization.
-The original policy.py uses PSD features [alpha, A, omega_c].
 """
 
 import torch
@@ -36,7 +34,7 @@ class GammaPulsePolicy(nn.Module):
 
     def __init__(
         self,
-        task_feature_dim: int = 3,  # (γ_deph/0.1, γ_relax/0.05, sum/0.15)
+        task_feature_dim: int = 3,
         hidden_dim: int = 128,
         n_hidden_layers: int = 2,
         n_segments: int = 20,
@@ -108,7 +106,6 @@ class GammaPulsePolicy(nn.Module):
 
         Args:
             task_features: (batch_size, task_feature_dim) or (task_feature_dim,)
-                           Expected: [γ_deph/0.1, γ_relax/0.05, sum/0.15]
 
         Returns:
             controls: (batch_size, n_segments, n_controls) or (n_segments, n_controls)
@@ -134,7 +131,7 @@ class GammaPulsePolicy(nn.Module):
     def get_lipschitz_constant(self) -> float:
         """
         Estimate Lipschitz constant L_net via spectral norms.
-        L_net ≤ ∏ℓ ||Wℓ||₂
+
         """
         lipschitz = 1.0
         for module in self.modules():
@@ -173,7 +170,7 @@ class GammaTaskFeatureEncoder(nn.Module):
         self.use_fourier = use_fourier
 
         if use_fourier:
-            # Random Fourier features: φ(x) = [cos(Bx), sin(Bx)]
+            # Random Fourier features
             self.register_buffer(
                 'B',
                 torch.randn(raw_dim, feature_dim // 2) * fourier_scale
@@ -241,7 +238,6 @@ def create_gamma_policy(
     return policy
 
 
-# For backward compatibility - alias to original name
 PulsePolicy = GammaPulsePolicy
 
 
@@ -264,8 +260,7 @@ if __name__ == "__main__":
     print(f"\nPolicy architecture:\n{policy}")
     print(f"\nTotal parameters: {policy.count_parameters():,}")
 
-    # Test forward pass with gamma features
-    # Gamma features: [γ_deph/0.1, γ_relax/0.05, sum/0.15]
+    # Test forward pass with gamma features 
     gamma_deph = 0.05  # Typical dephasing rate
     gamma_relax = 0.025  # Typical relaxation rate
     task_features = torch.tensor([

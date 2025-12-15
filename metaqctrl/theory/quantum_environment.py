@@ -70,7 +70,7 @@ class QuantumEnvironment:
         # Cache for differentiable PyTorch simulators (keyed by task hash)
         self._torch_sim_cache = {}
 
-        # Initial state (|0⟩ for single qubit, |00⟩ for two qubit)
+
         self.rho0 = np.zeros((self.d, self.d), dtype=complex)
         self.rho0[0, 0] = 1.0
 
@@ -190,7 +190,6 @@ class QuantumEnvironment:
         if key not in self._torch_sim_cache:
             # Get Lindblad operators
             L_ops_numpy = self.psd_to_lindblad.get_lindblad_operators(task_params)
-    #        print("🚀", L_ops_numpy)
 
             # Convert system to PyTorch tensors
             H0_torch = numpy_to_torch_complex(self.H0, device)
@@ -276,8 +275,7 @@ class QuantumEnvironment:
         from metaqctrl.quantum.gates import state_fidelity
 
         if self.target_unitary is None:
-            # Fallback: Use entanglement fidelity formula
-            # This is less accurate but doesn't require storing target unitary
+ 
             print("WARNING: target_unitary not provided. Using approximate fidelity.")
             print("         Set target_unitary in QuantumEnvironment for accurate process fidelity.")
 
@@ -314,7 +312,7 @@ class QuantumEnvironment:
         task_params: NoiseParameters,
         device: torch.device = torch.device('cpu')
     ) -> float:
-        """ Good.
+        """ 
         Evaluate policy on task.
 
         Args:
@@ -350,19 +348,7 @@ class QuantumEnvironment:
         task_params: NoiseParameters,
         device: torch.device = torch.device('cpu')
     ) -> torch.Tensor:
-        """ Take a look ==> which function is replacing it.
-        Compute loss (infidelity) with gradient support.
-
-        WARNING: This implementation is NOT fully differentiable because the quantum
-        simulation happens in numpy. For proper gradient flow through the quantum
-        dynamics, you need:
-        1. JAX-based differentiable quantum simulator, OR
-        2. PyTorch-based quantum simulator, OR
-        3. Analytical gradients via adjoint method
-
-        Current behavior: Gradients flow through the policy network but NOT through
-        the quantum simulation. This works for zeroth-order optimization and
-        finite-difference based MAML, but not for full second-order MAML.
+        """ 
 
         Args:
             policy: Policy network
@@ -382,8 +368,6 @@ class QuantumEnvironment:
         # Generate controls
         controls = policy(task_features)
 
-        # NOTE: detach() breaks gradient flow through quantum simulation
-        # For full differentiability, need JAX or PyTorch quantum simulator
         controls_np = controls.detach().cpu().numpy()
 
         # Evaluate fidelity (non-differentiable step)
@@ -408,14 +392,7 @@ class QuantumEnvironment:
         use_rk4: bool = True,
         dt: float = 0.01
     ) -> torch.Tensor:
-        """ Good: OK... this is the differentiable version that propogates gradients.
-        Compute loss (infidelity) with FULL gradient support through quantum simulation.
-
-        This is the NEW differentiable version that allows gradients to flow through
-        the entire quantum dynamics. Use this for proper meta-learning!
-
-        PERFORMANCE OPTIMIZED: Now uses cached simulators to avoid recreating them
-        on every call. This is crucial for GPU performance!
+        """ 
 
         Args:
             policy: Policy network
@@ -425,11 +402,9 @@ class QuantumEnvironment:
             dt: Integration time step (larger = faster but less accurate)
 
         Returns:
-            loss: FULLY DIFFERENTIABLE loss tensor with gradients!
+            loss: FULLY DIFFERENTIABLE loss tensor with gradient
         """
-        # Task features - FIXED: Use as_tensor instead of tensor to avoid copying
-        # This preserves gradient flow when using functional models (e.g., higher library)
-        # IMPORTANT: Use normalized=True for stable gradient flow (features scaled to ~[0,1])
+
 
         task_params_array = task_params.to_array(normalized=True)
         task_features = torch.as_tensor(
@@ -442,7 +417,7 @@ class QuantumEnvironment:
         controls = policy(task_features)  # (n_segments, n_controls)
 
 
-        # CRITICAL OPTIMIZATION: Get cached simulator instead of creating new one!
+
         sim = self.get_torch_simulator(task_params, device, dt=dt, use_rk4=use_rk4)
         
 
@@ -450,7 +425,6 @@ class QuantumEnvironment:
         rho0 = torch.zeros((self.d, self.d), dtype=torch.complex64, device=device)
         rho0[0, 0] = 1.0
 
-        # DIFFERENTIABLE quantum evolution!
         rho_final = sim(rho0, controls, self.T)
 
         # Target state (convert to torch)
@@ -469,7 +443,7 @@ class QuantumEnvironment:
         rho: torch.Tensor,
         sigma: torch.Tensor
     ) -> torch.Tensor:
-        """FIXED: Proper quantum fidelity for density matrices (differentiable).
+        """Proper quantum fidelity for density matrices (differentiable).
 
         F(ρ, σ) = Tr(ρσ) for pure states, approximated for mixed states
 
@@ -486,15 +460,10 @@ class QuantumEnvironment:
         Returns:
             fidelity: Real-valued fidelity in [0, 1]
         """
-        # Simplified fidelity: F ≈ Tr(ρσ)² as approximation
-        # For pure states, F = |⟨ψ|φ⟩|² = |Tr(ρσ)|² exactly
-        # For mixed states, this is an approximation but avoids eigh
 
         trace_prod = torch.trace(rho @ sigma)
 
-        # CRITICAL FIX: Use torch.abs() which maintains gradients!
-        # torch.abs() for complex tensors computes |z|² = real² + imag²
-        # and properly backpropagates through both components
+
         fidelity = torch.abs(trace_prod) ** 2
 
         # Clamp to valid range [0, 1]
@@ -647,7 +616,6 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
         sigma_p = np.array([[0, 1], [0, 0]], dtype=complex)
 
         # System Hamiltonians
-        # FIXED: Use small non-zero drift for better dynamics
         drift_strength = config.get('drift_strength')
         H0 = drift_strength * sigma_z
         H_controls = [sigma_x, sigma_y]
@@ -655,35 +623,11 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
         # Noise basis operators
         basis_operators = [sigma_p, sigma_z]
 
-    elif num_qubits == 2:
-        # 2-qubit system (NEW)
-        from metaqctrl.quantum.two_qubit_gates import (
-            get_two_qubit_control_hamiltonians,
-            get_two_qubit_noise_operators,
-            single_qubit_on_two_qubit
-        )
-
-        # CRITICAL FIX: Use proper 2-qubit control Hamiltonians
-        # These include entangling ZZ interaction needed for CNOT
-        H_controls = get_two_qubit_control_hamiltonians()  # [XI, IX, YI, ZZ]
-
-        # CRITICAL FIX: Non-zero drift Hamiltonian for 2-qubit
-        # Use ZZ interaction as drift (common in superconducting qubits)
-        drift_strength = config.get('drift_strength')  # Stronger for 2-qubit
-        I = np.eye(2, dtype=complex)
-        Z = np.array([[1, 0], [0, -1]], dtype=complex)
-        ZZ = np.kron(Z, Z)  # ZZ interaction
-        H0 = drift_strength * ZZ
-
-        # Get noise operators for both qubits
-        basis_operators = get_two_qubit_noise_operators(qubit=None)  # Both qubits
 
     else:
         raise ValueError(f"num_qubits={num_qubits} not supported. Use 1 or 2.")
 
-    # PSD model - NEW: Support for mixed models
-    # If config specifies multiple model_types, use dynamic model selection (psd_model=None)
-    # Otherwise, create fixed model for backward compatibility
+
     model_types = config.get('model_types')
     if model_types is None:
         # Single model mode (backward compatibility)

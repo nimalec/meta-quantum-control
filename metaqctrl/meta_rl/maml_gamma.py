@@ -1,23 +1,6 @@
 """
 Model-Agnostic Meta-Learning (MAML) for Gamma-Parameterized Quantum Control
 
-This module provides MAML training for policies using gamma-rate noise parameters.
-The MAML algorithm itself is task-agnostic, so we re-export the original implementation
-with gamma-specific documentation and helper classes.
-
-Key differences from maml.py usage:
-- Uses GammaNoiseParameters instead of NoiseParameters
-- Uses GammaTaskDistribution instead of TaskDistribution
-- Loss function uses DifferentiableLindbladSimulator with direct gamma rates
-
-Usage:
-    from metaqctrl.meta_rl.maml_gamma import MAML, GammaMAMLTrainer
-    from metaqctrl.meta_rl.policy_gamma import GammaPulsePolicy
-    from metaqctrl.quantum.noise_models_gamma import GammaTaskDistribution
-
-    policy = GammaPulsePolicy(task_feature_dim=3, ...)
-    maml = MAML(policy, inner_lr=0.01, inner_steps=5, ...)
-    trainer = GammaMAMLTrainer(maml, task_dist, loss_fn, ...)
 """
 
 import torch
