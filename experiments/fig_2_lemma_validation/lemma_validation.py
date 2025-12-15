@@ -23,9 +23,6 @@ plt.rcParams.update({
     'font.family': 'serif',
 })
 
-# =============================================================================
-# Quantum System Setup
-# =============================================================================
 
 SIGMA_X = np.array([[0, 1], [1, 0]], dtype=np.complex128)
 SIGMA_Y = np.array([[0, -1j], [1j, 0]], dtype=np.complex128)
@@ -80,9 +77,8 @@ def find_optimal(gd, gr, n_seg=4):
     return best_theta, best
 
 
-# =============================================================================
 # Panel (a): PL Condition
-# =============================================================================
+
 
 def generate_pl_data():
     """Generate PL condition validation data."""
@@ -116,9 +112,8 @@ def generate_pl_data():
     return np.array(all_subopt), np.array(all_gradsq), all_colors
 
 
-# =============================================================================
 # Panel (b): Lipschitz Continuity
-# =============================================================================
+
 
 def generate_lipschitz_data():
     """Generate Lipschitz validation data."""
@@ -144,7 +139,7 @@ def generate_lipschitz_data():
     return np.array(task_dists), np.array(lind_dists)
 
 
-# =============================================================================
+
 # Panel (c): Control Separation
 # =============================================================================
 
@@ -152,7 +147,6 @@ def generate_control_separation_data():
     """Generate control separation validation data."""
     gamma_ref = (0.05, 0.02)
     
-    # More careful optimization for reference
     best_loss = np.inf
     for _ in range(10):
         res = minimize(lambda t: loss_fn(t, gamma_ref[0], gamma_ref[1]), 
@@ -210,9 +204,7 @@ np.random.seed(44)
 cs_gamma, cs_theta = generate_control_separation_data()
 
 
-# =============================================================================
-# Create Composite Figure
-# =============================================================================
+
 # from matplotlib.patches import Patch 
 
 # fig, axes = plt.subplots(1, 3, figsize=(10, 3.2))
