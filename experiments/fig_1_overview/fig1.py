@@ -31,8 +31,7 @@ robust_pos = (0.0, 0.0)
 ax_b.plot(*robust_pos, 'k*', markersize=20, markeredgecolor='black', 
           markerfacecolor='gold', markeredgewidth=1.5, zorder=10)
 
-# Task-specific optima - only 2 tasks for cleaner look
-# Green moved to upper right to avoid inset
+# Task-specific optima  
 task_optima = [(-1.0, 0.8), (1.1, 1.0)]
 task_colors = ['#e74c3c', '#27ae60']
 task_labels = [r'$\xi_1$', r'$\xi_2$']
@@ -40,7 +39,6 @@ task_labels = [r'$\xi_1$', r'$\xi_2$']
 for i, (pos, color, label) in enumerate(zip(task_optima, task_colors, task_labels)):
     ax_b.plot(*pos, 'o', markersize=14, markerfacecolor=color, 
               markeredgecolor='white', markeredgewidth=2, zorder=10)
-    # Adaptation arrow from robust to task optimum - larger arrow head
     ax_b.annotate('', xy=pos, xytext=robust_pos,
                   arrowprops=dict(arrowstyle='-|>', color=color, lw=2.5, 
                                 mutation_scale=20,
