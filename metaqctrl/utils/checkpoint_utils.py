@@ -1,8 +1,6 @@
 """
 Utilities for loading policy checkpoints with automatic architecture detection.
 
-Handles cases where checkpoints were saved with different architecture parameters
-than the current config (e.g., different n_hidden_layers or hidden_dim).
 """
 
 import torch
@@ -31,7 +29,6 @@ def infer_policy_architecture_from_checkpoint(
     """
     checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
 
-    # Extract state dict
     if isinstance(checkpoint, dict) and 'policy_state_dict' in checkpoint:
         state_dict = checkpoint['policy_state_dict']
     elif isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
@@ -39,33 +36,25 @@ def infer_policy_architecture_from_checkpoint(
     else:
         state_dict = checkpoint
 
-    # Count network layers to infer n_hidden_layers
-    # Network structure: input layer + n_hidden_layers * (linear + activation) + output layer
-    # So we have layers: 0 (input), 1 (act), 2 (hidden1), 3 (act), ..., final (output)
     max_layer_idx = max([
         int(key.split('.')[1])
         for key in state_dict.keys()
         if key.startswith('network.') and '.weight' in key
     ])
 
-    # Get dimensions from the layers
+
     input_layer_out = state_dict['network.0.weight'].shape[0]  # hidden_dim
     output_layer_in = state_dict[f'network.{max_layer_idx}.weight'].shape[1]  # should be hidden_dim
     output_dim = state_dict[f'network.{max_layer_idx}.weight'].shape[0]
 
-    # Calculate n_hidden_layers
-    # Formula: max_layer_idx = 2 + 2 * n_hidden_layers
-    # Because: input(0) + act(1) + n_hidden_layers * 2 (each has linear + act) + output
-    # For n_hidden_layers=1: 0 (input), 1 (act), 2 (hidden), 3 (act), 4 (output) -> max_layer_idx=4
-    # For n_hidden_layers=2: 0 (input), 1 (act), 2 (hidden1), 3 (act), 4 (hidden2), 5 (act), 6 (output) -> max_layer_idx=6
+   
     n_hidden_layers = (max_layer_idx - 2) // 2
 
-    # Calculate expected dimensions
+   
     n_segments = config['n_segments']
     n_controls = config['n_controls']
     expected_output_dim = n_segments * n_controls
 
-    # Verify consistency
     if output_dim != expected_output_dim and verbose:
         print(f"WARNING: Checkpoint output_dim ({output_dim}) doesn't match expected ({expected_output_dim})")
         print(f"         This might indicate different n_segments or n_controls in checkpoint")
@@ -112,7 +101,6 @@ def load_policy_from_checkpoint(
         checkpoint_path, config, verbose=verbose
     )
 
-    # Create policy with detected architecture
     policy = PulsePolicy(
         task_feature_dim=arch_config['task_feature_dim'],
         hidden_dim=arch_config['hidden_dim'],
