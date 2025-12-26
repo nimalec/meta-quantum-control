@@ -2,9 +2,7 @@ import numpy as np
 from typing import List, Dict, Tuple, Optional
 from metaqctrl.quantum.noise_models_v2 import *  
 
-# Physical constants
 TWO_PI = 2.0 * np.pi
-
 
 class PSDToLindblad2:
     """
@@ -14,14 +12,6 @@ class PSDToLindblad2:
         converter = PSDToLindblad(basis_operators, sampling_freqs, psd_model)
         L_ops = converter.get_lindblad_operators(theta)
 
-    But uses physics-correct v2 implementation underneath with sensible defaults.
-
-    Default Physics Parameters (can be overridden):
-    ------------------------------------------------
-    - T: 50 μs (typical gate time for superconducting qubits)
-    - omega0: Estimated from sampling_freqs bandwidth
-    - sequence: 'ramsey' (free evolution, worst case for dephasing)
-    - Gamma_h: 0.0 (no homogeneous broadening)
     """
 
     def __init__(
@@ -29,7 +19,7 @@ class PSDToLindblad2:
         basis_operators: List[np.ndarray],
         sampling_freqs: np.ndarray,
         psd_model: NoisePSDModel,  
-        T: float = 0.1,  # 50 μs gate time
+        T: float = 0.1,   
         sequence: str = 'ramsey',
         omega0: Optional[float] = None,  
         Gamma_h: float = 100,  
@@ -56,16 +46,13 @@ class PSDToLindblad2:
         self.Gamma_h = float(Gamma_h)
 
         # Estimate omega0 from control bandwidth if not provided
-        if omega0 is None:
-            # Use Nyquist frequency of control bandwidth as rough estimate
+        if omega0 is None: 
             omega_max = np.max(self.sampling_freqs) if len(self.sampling_freqs) > 0 else 20.0
             self.omega0 = omega_max / 2.0  # Transition typically below control bandwidth
             self._omega0_estimated = True
         else:
             self.omega0 = float(omega0)
             self._omega0_estimated = False
-            
-        ##Double Check this 
         self.converter = PSDToLindblad(psd_model=self.psd_model)
 
     def get_lindblad_operators(self, theta: NoiseParameters) -> List[np.ndarray]:
@@ -76,10 +63,9 @@ class PSDToLindblad2:
             theta: NoiseParameters (alpha, A, omega_c)
 
         Returns:
-            L_ops: List of Lindblad operators [√Γ↓ |g⟩⟨e|, √Γ↑ |e⟩⟨g|, √γ_φ σ_z/√2]
+            L_ops: List of Lindblad operators  
         """
 
- 
         ops, rates = self.converter.qubit_lindblad_ops(
                 theta,
                 T=self.T,
@@ -92,10 +78,10 @@ class PSDToLindblad2:
 
     def get_effective_rates(self, theta: NoiseParameters) -> np.ndarray:
         """
-        Get effective decay rates [Γ↓, γ_φ] in rad/s.
+        Get effective decay rates. 
 
         Returns:
-            rates: Array of decay rates [1/s]
+            rates: Array of decay rates  
         """
         _, rates = self.converter.qubit_lindblad_ops(theta, T=self.T, sequence=self.sequence, omega0=self.omega0,  Gamma_h=self.Gamma_h)
         return rates
@@ -123,11 +109,6 @@ class PSDToLindblad2:
     ):
         """
         Update physics parameters after construction.
-
-        Useful for:
-        - Sweeping gate times T
-        - Comparing sequences (Ramsey vs Echo)
-        - Testing temperature effects
         """
         if T is not None:
             self.T = float(T)
@@ -140,7 +121,6 @@ class PSDToLindblad2:
             self.Gamma_h = float(Gamma_h)
 
 
-# Utility functions
 def estimate_qubit_frequency_from_hamiltonian(H0: np.ndarray) -> float:
     """
     Estimate qubit transition frequency from drift Hamiltonian.
@@ -155,10 +135,8 @@ def estimate_qubit_frequency_from_hamiltonian(H0: np.ndarray) -> float:
     eigenvalues = np.sort(np.real(eigenvalues))
 
     if len(eigenvalues) >= 2:
-        # Gap between ground and first excited state
         omega0 = float(np.abs(eigenvalues[1] - eigenvalues[0]))
     else:
-        # Fallback default (5 MHz)
         omega0 = TWO_PI   
 
     return omega0
