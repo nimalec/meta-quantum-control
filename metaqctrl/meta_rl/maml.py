@@ -1,5 +1,5 @@
 """
-Model-Agnostic Meta-Learning (MAML) Implementation
+First Order Model-Agnostic Meta-Learning (MAML) Implementation
 
 Meta-learns an initialization π₀ that adapts quickly to new tasks.
 """
@@ -12,7 +12,6 @@ import numpy as np
 from typing import List, Tuple, Dict, Callable, Optional
 from copy import deepcopy
 
-# Optional higher library for second-order MAML
 try:
     import higher  # For differentiable optimization
     HIGHER_AVAILABLE = True
@@ -21,8 +20,9 @@ except ImportError:
     higher = None
     
 class MAML:
-    """
-    MAML algorithm for meta-learning quantum control policies.
+    """ 
+    FOMAML algorithm for meta-learning quantum control policies.
+    In both cases (higher = True and False) --> first order is used. 
     
     Algorithm:
     1. Sample batch of tasks θ ~ P, sample tasks as noise 
@@ -72,7 +72,6 @@ class MAML:
         self.meta_pre_adapt_losses = []  # Track pre-adaptation losses
         self.meta_val_losses = []
 
-        # Warning flag for missing higher library
         self._warned_no_higher = False
     
     def inner_loop(
@@ -160,8 +159,8 @@ class MAML:
         loss_fn: Callable,
         use_higher: bool = True
     ) -> Dict[str, float]:
-        """IMPROVED: Added NaN/Inf checks for numerical stability.
-        Single meta-training step on a batch of tasks.deep
+        """ 
+        Single meta-training step on a batch of tasks.  
 
         Args:
             task_batch: List of task dictionaries, each with 'support' and 'query'
@@ -176,13 +175,14 @@ class MAML:
         meta_loss_tensor = None  
         task_losses = []
         task_pre_adapt_losses = []  
-        use_manual_grads = False  # Track if we're using manual gradient computation
+        use_manual_grads = False   
 
         for task_data in task_batch:
             with torch.no_grad():
                 pre_adapt_loss = loss_fn(self.policy, task_data['query'])
                 task_pre_adapt_losses.append(pre_adapt_loss.item())
             if use_higher and not self.first_order and HIGHER_AVAILABLE:
+                ## Modified ....instead just using FO MAML for both --> both if and else are the same 
                 support_data = task_data['support']
                 query_data = task_data['query']
 
@@ -193,7 +193,7 @@ class MAML:
                     self.policy,
                     inner_opt,
                     copy_initial_weights=True,
-                    track_higher_grads=True  # Enable gradient tracking for second-order
+                    track_higher_grads=True   
                 ) as (fmodel, diffopt):
                     # Inner loop adaptation on support set
                     for step in range(self.inner_steps):
@@ -242,8 +242,6 @@ class MAML:
                         allow_unused=True
                     )
 
-                    # Apply these gradients to meta-parameters
-                    # (accumulate since we're batching over tasks)
                     for meta_param, adapted_grad in zip(meta_params, adapted_grads):
                         if adapted_grad is not None:
                             if meta_param.grad is None:
@@ -252,7 +250,6 @@ class MAML:
                                 meta_param.grad += adapted_grad.clone()
 
                 else:
-                    # Manual first-order MAML (only if higher not available)
                     adapted_policy, inner_losses = self.inner_loop(task_data, loss_fn)
                     query_loss = loss_fn(adapted_policy, task_data['query'])
 
@@ -293,8 +290,6 @@ class MAML:
 
             task_losses.append(query_loss.item())
 
-        # FIXED: Properly handle averaging - avoid double averaging
-        # Count how many tasks actually contributed (some may have been skipped due to NaN)
         n_valid_tasks = len(task_losses)
 
         if n_valid_tasks == 0:
@@ -308,11 +303,9 @@ class MAML:
                 'error': 'no_valid_tasks'
             }
 
-        # Average accumulated loss over valid tasks
         meta_loss_tensor = meta_loss_tensor / n_valid_tasks
         meta_loss = meta_loss_tensor.item()
 
-        # NEW: Check meta_loss before backward
         if np.isnan(meta_loss) or np.isinf(meta_loss):
             print(f"ERROR: Invalid meta_loss detected: {meta_loss}")
             print("  Skipping this meta-update to prevent corruption")
@@ -339,20 +332,18 @@ class MAML:
 
         # Logging
         metrics = {
-            'meta_loss': meta_loss,  # Already a Python float (post-adaptation)
+            'meta_loss': meta_loss,   
             'mean_task_loss': np.mean(task_losses),
             'std_task_loss': np.std(task_losses),
             'min_task_loss': np.min(task_losses),
             'max_task_loss': np.max(task_losses),
             'grad_norm': grad_norm.item(),
-            # NEW: Pre-adaptation metrics
             'mean_pre_adapt_loss': np.mean(task_pre_adapt_losses) if task_pre_adapt_losses else float('nan'),
             'std_pre_adapt_loss': np.std(task_pre_adapt_losses) if task_pre_adapt_losses else float('nan'),
             'adaptation_gain': np.mean(task_pre_adapt_losses) - meta_loss if task_pre_adapt_losses else float('nan')
         }
 
-        self.meta_train_losses.append(meta_loss)  # Already a Python float
-        # Also track pre-adaptation loss
+        self.meta_train_losses.append(meta_loss)  
         pre_adapt_loss = np.mean(task_pre_adapt_losses) if task_pre_adapt_losses else float('nan')
         self.meta_pre_adapt_losses.append(pre_adapt_loss)
         return metrics
@@ -378,17 +369,11 @@ class MAML:
         try:
             val_losses = []
             adapted_losses = []
-
-            # Don't use no_grad during validation - we need gradients for inner loop!
-            # We just won't backprop to the meta-parameters (deepcopy handles this)
             for task_data in val_tasks:
-                # Loss before adaptation (can be done without grad)
                 with torch.no_grad():
                     pre_loss = loss_fn(self.policy, task_data['query'])
                     val_losses.append(pre_loss.item())
 
-                # Adapt on support set (NEEDS gradients for inner loop!)
-                # Note: inner_loop uses a deepcopy, so meta-parameters won't be affected
                 adapted_policy, _ = self.inner_loop(task_data, loss_fn)
 
                 # Loss after adaptation (no grad needed)
@@ -396,7 +381,6 @@ class MAML:
                     post_loss = loss_fn(adapted_policy, task_data['query'])
                     adapted_losses.append(post_loss.item())
         finally:
-            # Always restore train mode, even if exception occurs
             self.policy.train()
 
         metrics = {
@@ -411,7 +395,6 @@ class MAML:
         return metrics
     
     def save_checkpoint(self, path: str, epoch: int, **kwargs):
-        ## Saves meta learned states
         """Save meta-learned initialization and training state."""
         checkpoint = {
             'epoch': epoch,
@@ -424,9 +407,7 @@ class MAML:
             'meta_val_losses': self.meta_val_losses,
             **kwargs
         }
-        torch.save(checkpoint, path)
-
-        # ALSO save just the policy weights for easy loading in experiments
+        torch.save(checkpoint, path) 
         policy_only_path = path.replace('.pt', '_policy.pt')
         torch.save(self.policy.state_dict(), policy_only_path)
 
@@ -434,7 +415,7 @@ class MAML:
         print(f"Policy weights saved to {policy_only_path}")
     
     def load_checkpoint(self, path: str) -> int:
-        ##Load a check point ofr an epoch 
+ 
         """Load meta-learned initialization and training state."""
         checkpoint = torch.load(path, map_location=self.device)
         
@@ -453,9 +434,8 @@ class MAML:
 
 
 class MAMLTrainer:
-    ## Higher level training 
     """
-    High-level trainer for MAML experiments.
+    High-level trainer for FOMAML experiments.
     Handles task sampling, data generation, and training loop.
     """
     
@@ -493,7 +473,6 @@ class MAMLTrainer:
         self.iteration = 0
         self.best_val_loss = float('inf')
 
-        # Training history tracking (for figure generation)
         self.training_history = {
             'iterations': [],          # Iteration numbers
             'meta_loss': [],           # Meta-loss (query loss)
@@ -522,7 +501,6 @@ class MAMLTrainer:
         
         task_batch = []
         for task_params in tasks:
-            # Generate support and query data for this task
             support_data = self.data_generator(
                 task_params,
                 n_trajectories=self.n_support,
@@ -578,11 +556,7 @@ class MAMLTrainer:
             self.training_history['grad_norms'].append(train_metrics.get('grad_norm', 0.0))
 
             pre_adapt_loss = train_metrics.get('mean_pre_adapt_loss', float('nan'))
-           # if 'pre_adapt_loss' not in self.training_history:
-             #   self.training_history['pre_adapt_loss'] = []
 
-
-            # Track NaN incidents
             has_nan = train_metrics.get('error') == 'invalid_loss' or train_metrics.get('error') == 'no_valid_tasks'
             self.training_history['nan_count'].append(1 if has_nan else 0)
 
@@ -602,7 +576,6 @@ class MAMLTrainer:
                 print(f"  Post-adapt: Loss={post_adapt_loss:.4f}, Fidelity={post_adapt_fidelity:.4f}")
                 print(f"  Adaptation Gain: {adapt_gain:.4f} | Grad Norm: {grad_norm:.4f}")
 
-                # DIAGNOSTIC: Check if any parameter has zero gradient
                 if iteration % (self.log_interval * 5) == 0:  # Every 5th log interval
                     zero_grad_count = 0
                     total_params = 0
@@ -613,12 +586,11 @@ class MAMLTrainer:
                     if zero_grad_count > 0:
                         print(f"  [DIAGNOSTIC] {zero_grad_count}/{total_params} parameters have zero/no gradients")
             
-            # Validation
+
             if iteration % self.val_interval == 0 and iteration > 0:
                 val_task_batch = self.generate_task_batch(val_tasks, split='val')
                 val_metrics = self.maml.meta_validate(val_task_batch, self.loss_fn)
 
-                # Track validation metrics (loss = 1 - fidelity)
                 val_fidelity = 1.0 - val_metrics['val_loss_post_adapt']
                 val_error = val_metrics['val_loss_post_adapt']
                 val_fidelity_std = val_metrics['std_post_adapt']
@@ -644,11 +616,9 @@ class MAMLTrainer:
                     best_path = save_path.replace('.pt', '_best.pt')
                     self.maml.save_checkpoint(best_path, iteration, **val_metrics)
         
-        # Save final checkpoint
         if save_path:
             self.maml.save_checkpoint(save_path, n_iterations)
 
-            # Save training history
             self.save_training_history(save_path)
 
         print("\nTraining complete!")
@@ -658,7 +628,6 @@ class MAMLTrainer:
         import json
         from pathlib import Path
 
-        # Create history file path based on checkpoint path
         history_path = Path(checkpoint_path).parent / "training_history.json"
 
         with open(history_path, 'w') as f:
