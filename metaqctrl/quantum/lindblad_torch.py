@@ -2,11 +2,7 @@
 Differentiable Lindblad Master Equation Simulator (PyTorch)
 
 This module provides a fully differentiable implementation of the Lindblad
-master equation using PyTorch. Unlike the NumPy/SciPy version, this allows
-gradients to flow through the quantum simulation for end-to-end training.
-
-Implements equation (3.1):
-ρ̇(t) = -i[H₀ + Σₖ uₖ(t)Hₖ, ρ(t)] + Σⱼ (Lⱼ,θ ρ L†ⱼ,θ - ½{L†ⱼ,θ Lⱼ,θ, ρ})
+master equation using PyTorch.   
 """
 
 import torch
@@ -16,13 +12,7 @@ from typing import List, Tuple, Optional
 
 class DifferentiableLindbladSimulator(nn.Module):
     """
-    PyTorch-native Lindblad simulator with full gradient support.
-
-    Key features:
-    - Fully differentiable (gradients flow through entire simulation)
-    - GPU compatible
-    - Supports batched simulation
-    - RK4 integration for accuracy
+    PyTorch-native Lindblad simulator with full gradient support. 
     """
 
     def __init__(
@@ -51,8 +41,6 @@ class DifferentiableLindbladSimulator(nn.Module):
         self.method = method
         self.dt = dt
         self.max_control_amp = max_control_amp
-
-        # Convert to complex tensors on device
         self.H0 = H0.to(device).to(torch.complex64)
         self.H_controls = [H.to(device).to(torch.complex64) for H in H_controls]
         self.L_operators = [L.to(device).to(torch.complex64) for L in L_operators]
@@ -61,7 +49,6 @@ class DifferentiableLindbladSimulator(nn.Module):
         self.n_controls = len(H_controls)
         self.n_lindblad = len(L_operators)
 
-        # Precompute anti-commutators for efficiency
         self.anti_commutators = [
             L.conj().T @ L for L in self.L_operators
         ]
@@ -84,20 +71,13 @@ class DifferentiableLindbladSimulator(nn.Module):
 
         u = torch.clamp(u, -self.max_control_amp, self.max_control_amp)
 
-        # Build total Hamiltonian: H_total = H₀ + Σₖ uₖ Hₖ
-        # FIXED: Build H_total without clone() to maintain gradient flow
-        # Start with H0 and add control terms
         H_total = self.H0 + sum(u_k * H_k for u_k, H_k in zip(u, self.H_controls))
 
-        # Hamiltonian evolution: -i[H, ρ]
         hamiltonian_term = -1j * (H_total @ rho - rho @ H_total)
 
-        # Dissipation: Σⱼ (Lⱼ ρ L†ⱼ - ½{L†ⱼLⱼ, ρ})
         dissipation_term = torch.zeros_like(rho)
         for j, L_j in enumerate(self.L_operators):
-            # Lⱼ ρ L†ⱼ
-            dissipation_term = dissipation_term + L_j @ rho @ L_j.conj().T
-            # -½ L†ⱼLⱼ ρ - ½ ρ L†ⱼLⱼ
+            dissipation_term = dissipation_term + L_j @ rho @ L_j.conj().T 
             dissipation_term = dissipation_term - 0.5 * (
                 self.anti_commutators[j] @ rho + rho @ self.anti_commutators[j]
             )
@@ -143,13 +123,11 @@ class DifferentiableLindbladSimulator(nn.Module):
         Returns:
             rho_next: Density matrix at next time step
         """
-        # RK4 coefficients
         k1 = self.lindbladian(rho, u)
         k2 = self.lindbladian(rho + 0.5 * dt * k1, u)
         k3 = self.lindbladian(rho + 0.5 * dt * k2, u)
         k4 = self.lindbladian(rho + dt * k3, u)
 
-        # Weighted average
         rho_next = rho + (dt / 6.0) * (k1 + 2*k2 + 2*k3 + k4)
 
         return rho_next
@@ -160,7 +138,7 @@ class DifferentiableLindbladSimulator(nn.Module):
         control_sequence: torch.Tensor,
         T: float,
         return_trajectory: bool = False,
-        normalize: bool = True  # NEW: Option to normalize density matrices
+        normalize: bool = True   
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Evolve state from t=0 to t=T under piecewise-constant controls.
@@ -183,8 +161,6 @@ class DifferentiableLindbladSimulator(nn.Module):
 
         # Ensure rho0 is complex
         rho = rho0.to(torch.complex64).to(self.device)
-
-        # FIXED: Only validate in debug mode (removed prints for training)
         trace0 = torch.trace(rho).real
         # Renormalize initial state if needed
         if torch.abs(trace0 - 1.0) > 0.01 and trace0 > 1e-10:
@@ -192,12 +168,8 @@ class DifferentiableLindbladSimulator(nn.Module):
 
         if return_trajectory:
             trajectory = [rho.clone()]
-
-        # Evolve through each control segment
         for seg_idx in range(n_segments):
             u_seg = control_sequence[seg_idx]
-
-            # Multiple substeps within segment for accuracy
             n_substeps = max(1, int(t_segment / self.dt))
             dt_substep = t_segment / n_substeps
 
@@ -211,17 +183,15 @@ class DifferentiableLindbladSimulator(nn.Module):
 
                 if normalize:
                     trace = torch.trace(rho).real
-                    if trace > 1e-10:  # Avoid division by zero
+                    if trace > 1e-10: 
                         rho = rho / trace
                     else:
-                        # Trace collapsed - reset to initial state
                         rho = rho0.clone()
                         if return_trajectory:
                             trajectory.append(rho.clone())
                         return rho, (torch.stack(trajectory) if return_trajectory else None)
 
                     if torch.isnan(rho).any() or torch.isinf(rho).any():
-                        # Reset to initial state (maintains gradient flow better)
                         rho = rho0.clone()
 
 
@@ -272,12 +242,10 @@ def numpy_to_torch_complex(array, device='cpu'):
     import numpy as np
 
     if np.iscomplexobj(array):
-        # Already complex
         real_part = torch.from_numpy(array.real).float()
         imag_part = torch.from_numpy(array.imag).float()
         tensor = torch.complex(real_part, imag_part)
     else:
-        # Real array, convert to complex
         tensor = torch.from_numpy(array).float()
         tensor = tensor.to(torch.complex64)
 
@@ -300,79 +268,4 @@ def torch_to_numpy_complex(tensor):
     real_part = tensor_cpu.real.numpy()
     imag_part = tensor_cpu.imag.numpy()
 
-    return real_part + 1j * imag_part
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    print("Testing Differentiable Lindblad Simulator")
-    print("=" * 60)
-
-    # 1-qubit system (Pauli matrices)
-    sigma_x = torch.tensor([[0, 1], [1, 0]], dtype=torch.complex64)
-    sigma_y = torch.tensor([[0, -1j], [1j, 0]], dtype=torch.complex64)
-    sigma_z = torch.tensor([[1, 0], [0, -1]], dtype=torch.complex64)
-
-    # System Hamiltonians
-    H0 = 0.5 * sigma_z  # Drift
-    H_controls = [sigma_x, sigma_y]  # Control Hamiltonians
-
-    # Lindblad operators (dephasing)
-    gamma = 0.1
-    L_ops = [torch.sqrt(torch.tensor(gamma)) * sigma_z]
-
-    # Create simulator
-    sim = DifferentiableLindbladSimulator(
-        H0=H0,
-        H_controls=H_controls,
-        L_operators=L_ops,
-        dt=0.05,
-        method='rk4'
-    )
-
-    print(f"\nSimulator created:")
-    print(f"  Dimension: {sim.d}")
-    print(f"  Controls: {sim.n_controls}")
-    print(f"  Lindblad operators: {sim.n_lindblad}")
-    print(f"  Method: {sim.method}")
-
-    # Initial state |0⟩
-    rho0 = torch.tensor([[1, 0], [0, 0]], dtype=torch.complex64)
-
-    # Control sequence (random) - must be a leaf tensor
-    n_segments = 20
-    controls = torch.nn.Parameter(torch.randn(n_segments, 2) * 0.5)
-
-    print(f"\nControl sequence:")
-    print(f"  Shape: {controls.shape}")
-    print(f"  Requires grad: {controls.requires_grad}")
-    print(f"  Is leaf: {controls.is_leaf}")
-
-    # Forward simulation
-    print("\nRunning forward simulation...")
-    rho_final, trajectory = sim.evolve(rho0, controls, T=1.0, return_trajectory=True)
-
-    print(f"  Final state shape: {rho_final.shape}")
-    print(f"  Trajectory shape: {trajectory.shape}")
-
-    # Compute purity (should decrease due to decoherence)
-    purity = torch.trace(rho_final @ rho_final).real
-    print(f"  Final purity: {purity.item():.4f}")
-
-    # Test gradient flow
-    print("\nTesting gradient flow...")
-    loss = -purity  # Maximize purity
-    loss.backward()
-
-    print(f"  Loss computed: {loss.item():.4f}")
-    print(f"  Gradients available: {controls.grad is not None}")
-
-    if controls.grad is not None:
-        grad_norm = torch.norm(controls.grad).item()
-        print(f"  Gradient norm: {grad_norm:.4e}")
-        print(f"  Gradient shape: {controls.grad.shape}")
-        print(f"   GRADIENT FLOW WORKS!")
-
-    print("\n" + "=" * 60)
-    print("Differentiable Lindblad Simulator Test Complete!")
-    print("=" * 60)
+    return real_part + 1j * imag_part 
