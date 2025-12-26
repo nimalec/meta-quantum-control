@@ -34,9 +34,7 @@ meta-quantum-control/
 │   │   ├── optimality_gap.py         # Gap analysis
 │   │   └── physics_constants.py      # Spectral gap computation
 │   └── utils/                    # Utilities
-│       ├── checkpoint_utils.py   # Model saving/loading
-│       └── plot_training.py      # Visualization
-│       └── plots.py              # plotting general
+│       ├── checkpoint_utils.py   # Model saving/loading 
 ├── experiments/                  # Reproducible experiment scripts
 │   ├── fig_2_lemma_validation/
 │   ├── fig_3_adaptation_gap_analysis/
