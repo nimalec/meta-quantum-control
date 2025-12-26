@@ -1,10 +1,7 @@
 """
 Number of Adaptation Steps Analysis - GAMMA-RATE Version
-========================================================
-
-Uses direct gamma_deph/gamma_relax parameterization (Markovian limit).
-Trains fresh robust baseline, avoiding checkpoint compatibility issues.
-
+  
+ 
 Usage:
     python generate_adaptation_steps_figure_gamma_backup.py
 """

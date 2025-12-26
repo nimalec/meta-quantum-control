@@ -190,7 +190,7 @@ def main(config_path: str):
     # Create quantum environment (NEW!)
     print("\nSetting up quantum environment...")
     ## Create a setting for a new enviroment
-    from metaqctrl.theory.quantum_environment import create_quantum_environment
+    from metaqctrl.quantum.quantum_environment import create_quantum_environment
 
     
     env = create_quantum_environment(config, target_state)

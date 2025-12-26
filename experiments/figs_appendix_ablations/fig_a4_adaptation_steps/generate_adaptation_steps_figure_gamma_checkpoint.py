@@ -1,6 +1,6 @@
 """
 Adaptation Steps Ablation - Using Pretrained Gamma Checkpoint
-=============================================================
+  
 """
 
 import sys

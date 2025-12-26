@@ -34,7 +34,7 @@ import yaml
 
 from metaqctrl.meta_rl.policy import PulsePolicy
 from metaqctrl.quantum.noise_adapter import TaskDistribution, NoiseParameters
-from metaqctrl.theory.quantum_environment import create_quantum_environment
+from metaqctrl.quantum.quantum_environment import create_quantum_environment
 from metaqctrl.utils.checkpoint_utils import load_policy_from_checkpoint
 
 plt.rcParams.update({
