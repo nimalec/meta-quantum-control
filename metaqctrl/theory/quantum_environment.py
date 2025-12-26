@@ -1,8 +1,5 @@
 """
-Quantum Environment Bridge
-
-Unified interface between theory and experiments.
-Handles simulation, caching, and fidelity computation efficiently.
+Quantum Environment Bridge 
 """
 
 import numpy as np
@@ -18,12 +15,7 @@ from metaqctrl.quantum.gates import state_fidelity
 
 class QuantumEnvironment:
     """
-    Unified environment for quantum control.
-    
-    Features:
-    - Caching of Lindblad operators by task
-    - Efficient simulation reuse
-    - Unified interface for theory and experiments
+    Unified environment for quantum control. 
     """
     
     def __init__(
@@ -57,26 +49,17 @@ class QuantumEnvironment:
         self.omega0 = None 
 
 
-        # System dimensions
         self.d = H0.shape[0]
         self.n_controls = len(H_controls)
 
-        # Cache for Lindblad operators (keyed by task hash)
         self._L_cache = {}
 
-        # Cache for simulators (keyed by task hash)
         self._sim_cache = {}
 
-        # Cache for differentiable PyTorch simulators (keyed by task hash)
         self._torch_sim_cache = {}
 
-
         self.rho0 = np.zeros((self.d, self.d), dtype=complex)
-        self.rho0[0, 0] = 1.0
-
-        print(f"QuantumEnvironment initialized: d={self.d}, n_controls={self.n_controls}, T={T}")
-
-    # API compatibility properties
+        self.rho0[0, 0] = 1.0 
     @property
     def num_controls(self) -> int:
         """Alias for n_controls for backward compatibility."""
@@ -90,14 +73,11 @@ class QuantumEnvironment:
     @property
     def omega_control(self) -> np.ndarray:
         """Control frequencies - placeholder for compatibility."""
-        ## Change this 
-        # Return typical control frequencies based on system
         return np.array([1.0, 5.0, 10.0])
 
     @property
     def control_susceptibility(self) -> np.ndarray:
         """Control susceptibility matrix - placeholder for compatibility."""
-        # Return identity-like matrix as placeholder
         return np.eye(len(self.H_controls))
 
     def compute_fidelity(self, controls: np.ndarray, task_params: NoiseParameters) -> float:
@@ -109,13 +89,12 @@ class QuantumEnvironment:
         return (
             round(task_params.alpha, 6),
             round(task_params.A, 6),
-            round(task_params.omega_c, 6),
-            #Consider removing this line.  
-            task_params.model_type  # NEW: Include model type in hash
+            round(task_params.omega_c, 6), 
+            task_params.model_type 
         )
     
     def get_lindblad_operators(self, task_params: NoiseParameters) -> list:
-        """ Good.  
+        """ 
         Get Lindblad operators for task with caching.
         
         Args:
@@ -127,7 +106,6 @@ class QuantumEnvironment:
         key = self._task_hash(task_params)
 
         if key not in self._L_cache:
-            # Use adapter's backward-compatible API (handles v2 physics internally)
             L_ops = self.psd_to_lindblad.get_lindblad_operators(task_params)
             self._L_cache[key] = L_ops
 
@@ -135,7 +113,7 @@ class QuantumEnvironment:
         return self._L_cache[key]
     
     def get_simulator(self, task_params: NoiseParameters) -> LindbladSimulator:
-        """ Good.
+        """ 
         Get simulator for task with caching.
 
         Args:
@@ -172,9 +150,6 @@ class QuantumEnvironment:
         """
         Get cached differentiable PyTorch simulator for task.
 
-        CRITICAL OPTIMIZATION: Caches simulators to avoid recreating them
-        for every loss call, which was the main performance bottleneck.
-
         Args:
             task_params: Task noise parameters
             device: torch device
@@ -184,20 +159,16 @@ class QuantumEnvironment:
         Returns:
             sim: Cached DifferentiableLindbladSimulator instance
         """
-        # Cache key includes device and integration settings
         key = (self._task_hash(task_params), str(device), dt, use_rk4)
 
         if key not in self._torch_sim_cache:
-            # Get Lindblad operators
+
             L_ops_numpy = self.psd_to_lindblad.get_lindblad_operators(task_params)
 
-            # Convert system to PyTorch tensors
             H0_torch = numpy_to_torch_complex(self.H0, device)
             H_controls_torch = [numpy_to_torch_complex(H, device) for H in self.H_controls]
             L_ops_torch = [numpy_to_torch_complex(L, device) for L in L_ops_numpy]
 
-          
-            # Create differentiable simulator
             sim = DifferentiableLindbladSimulator(
                 H0=H0_torch,
                 H_controls=H_controls_torch,
@@ -218,7 +189,7 @@ class QuantumEnvironment:
         return_trajectory: bool = False,
         use_process_fidelity: bool = False
     ) -> float:
-        """ Good.
+        """  
         Simulate and compute fidelity.
 
         Args:
@@ -232,20 +203,19 @@ class QuantumEnvironment:
             fidelity: Achieved fidelity (float)
             or (fidelity, trajectory) if return_trajectory=True
         """
-        # Get cached simulator
+    
         sim = self.get_simulator(task_params)
 
         if use_process_fidelity and self.d > 2:
-            # For multi-qubit gates, compute average fidelity over all computational basis states
             fidelity = self._compute_average_gate_fidelity(sim, controls)
 
             if return_trajectory:
-                # For trajectory, just use initial state |0...0⟩
+    
                 rho_final, trajectory = sim.evolve(self.rho0, controls, self.T)
                 return fidelity, trajectory
             return fidelity
         else:
-            # Standard single-state fidelity (works for 1-qubit)
+
             rho_final, trajectory = sim.evolve(self.rho0, controls, self.T)
             fidelity = state_fidelity(rho_final, self.target_state)
 
@@ -279,15 +249,12 @@ class QuantumEnvironment:
             print("WARNING: target_unitary not provided. Using approximate fidelity.")
             print("         Set target_unitary in QuantumEnvironment for accurate process fidelity.")
 
-            # Just return single-state fidelity as fallback
             rho_final, _ = sim.evolve(self.rho0, controls, self.T)
             return state_fidelity(rho_final, self.target_state)
-
-        # Proper average gate fidelity: Test on all computational basis states
         fidelities = []
 
         for i in range(self.d):
-            # Create initial state |i⟩
+     
             ket_i = np.zeros(self.d, dtype=complex)
             ket_i[i] = 1.0
             rho_i = np.outer(ket_i, ket_i.conj())
@@ -370,11 +337,9 @@ class QuantumEnvironment:
 
         controls_np = controls.detach().cpu().numpy()
 
-        # Evaluate fidelity (non-differentiable step)
+
         fidelity = self.evaluate_controls(controls_np, task_params)
 
-        # Create loss tensor
-        # Setting requires_grad=False is honest about gradient limitations
         loss = torch.tensor(
             1.0 - fidelity,
             dtype=torch.float32,
@@ -400,9 +365,6 @@ class QuantumEnvironment:
             device: torch device
             use_rk4: If True, use RK4 integration (more accurate but slower)
             dt: Integration time step (larger = faster but less accurate)
-
-        Returns:
-            loss: FULLY DIFFERENTIABLE loss tensor with gradient
         """
 
 
@@ -413,15 +375,13 @@ class QuantumEnvironment:
             device=device
         )
 
-        # Generate controls (this is differentiable)
+
         controls = policy(task_features)  # (n_segments, n_controls)
 
 
 
         sim = self.get_torch_simulator(task_params, device, dt=dt, use_rk4=use_rk4)
         
-
-        # Initial state |0⟩
         rho0 = torch.zeros((self.d, self.d), dtype=torch.complex64, device=device)
         rho0[0, 0] = 1.0
 
@@ -445,14 +405,6 @@ class QuantumEnvironment:
     ) -> torch.Tensor:
         """Proper quantum fidelity for density matrices (differentiable).
 
-        F(ρ, σ) = Tr(ρσ) for pure states, approximated for mixed states
-
-        This implementation uses a simplified fidelity that avoids eigendecomposition
-        issues with complex matrices. For nearly pure states (as in gate optimization),
-        this is a good approximation.
-
-        GRADIENT FIX: Use torch.abs() instead of .real/.imag to maintain gradient flow!
-
         Args:
             rho: Density matrix (d x d) complex tensor
             sigma: Density matrix (d x d) complex tensor
@@ -466,7 +418,6 @@ class QuantumEnvironment:
 
         fidelity = torch.abs(trace_prod) ** 2
 
-        # Clamp to valid range [0, 1]
         fidelity = torch.clamp(fidelity, 0.0, 1.0)
 
         return fidelity
@@ -530,11 +481,9 @@ class BatchedQuantumEnvironment(QuantumEnvironment):
             fidelities: (batch_size,) array of fidelities
         """
         if self.use_jax:
-            # TODO: Implement JAX batching
-            # For now, fall back to serial
+
             pass
         
-        # Serial fallback
         fidelities = []
         for controls, task_params in zip(controls_batch, task_params_batch):
             fid = self.evaluate_controls(controls, task_params)
@@ -586,7 +535,6 @@ def get_target_state_from_config(config: dict) -> Tuple[np.ndarray, np.ndarray]:
     return target_state, U_target
 
 
-# Factory function
 def create_quantum_environment(config: dict, target_state: np.ndarray = None, target_unitary: np.ndarray = None) -> QuantumEnvironment:
     """
     Create quantum environment from config.
@@ -630,12 +578,9 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
 
     model_types = config.get('model_types')
     if model_types is None:
-        # Single model mode (backward compatibility)
-        ## Look at how this is implemented 
         psd_model = NoisePSDModel(model_type=config.get('psd_model')) 
     else:
-        # Mixed model mode - use dynamic selection
-        ## Think about fixing this...  
+
         psd_model = None 
         print(f"INFO: Mixed model mode enabled with models: {model_types}")
 
@@ -644,25 +589,15 @@ def create_quantum_environment(config: dict, target_state: np.ndarray = None, ta
     T = config.get('horizon')
     omega_max = n_segments / T
     omega_sample = np.linspace(0, omega_max, 1000)
-
-    # Physics parameters for v2 (with sensible defaults)
-    # Estimate qubit frequency from Hamiltonian if not provided
     omega0 = config.get('omega0')
     if omega0 is None:
-        omega0 = estimate_qubit_frequency_from_hamiltonian(H0)
+        omega0 = estimate_qubit_frequency_from_hamiltonian(H0) 
+    noise_type = config.get('noise_type')   
 
-    # Get coupling constant for noise type
-    noise_type = config.get('noise_type')  # 'frequency', 'magnetic', 'charge', 'amplitude'
+    sequence = config.get('sequence') 
  
-    # Pulse sequence for dephasing filter function
-    sequence = config.get('sequence')  # 'ramsey', 'echo', 'cpmg_n'
-
-    # Homogeneous broadening (rad/s)
     Gamma_h = config.get('Gamma_h')
  
-    # PSD to Lindblad converter (uses v2 physics via adapter)
-   ## Look at how this is implemented  
-    print("model!", psd_model)
     
     psd_to_lindblad = PSDToLindblad2(
         basis_operators=basis_operators,
