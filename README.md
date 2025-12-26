@@ -54,21 +54,9 @@ meta-quantum-control/
 │   └── checkpoints_gamma/        # Gamma-trained checkpoints
 ```
 
-## Installation
-
 ### Prerequisites
 
 This project uses [uv](https://github.com/astral-sh/uv) for dependency management.
-
-### Dependencies
-
-Core dependencies (automatically installed):
-- PyTorch >= 2.0.0
-- NumPy >= 1.24.0, SciPy >= 1.10.0
-- JAX >= 0.4.0 (optional GPU acceleration)
-- higher >= 0.2.1 (differentiable inner loop)
-- QuTiP >= 4.7.0 (quantum utilities)
-- Hydra >= 1.3.0 (configuration management)
 
 ## Quick Start
 
@@ -76,7 +64,7 @@ Core dependencies (automatically installed):
 
 ```bash
 cd experiments/fig_5_meta_training
-python train_meta_gamma.py --config ../../configs/experiment_config_gamma.yaml
+uv run train_meta_gamma.py --config ../../configs/experiment_config_gamma.yaml
 ```
 
 This will:
