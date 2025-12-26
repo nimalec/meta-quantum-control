@@ -7,7 +7,6 @@ Key differences from policy.py:
 - task_feature_dim=3 for gamma features [γ_deph/0.1, γ_relax/0.05, sum/0.15]
 - Input normalization designed for gamma rates
 - Use with GammaNoiseParameters from noise_models_gamma.py
-
 """
 
 import torch
@@ -19,9 +18,6 @@ from typing import Tuple, Optional
 class GammaPulsePolicy(nn.Module):
     """
     Neural network policy for gamma-parameterized quantum control.
-
-    Architecture:
-        gamma_features → MLP → (n_segments × n_controls) control amplitudes
 
     Input features (3D):
         [gamma_deph/0.1, gamma_relax/0.05, (gamma_deph + gamma_relax)/0.15]
@@ -38,7 +34,7 @@ class GammaPulsePolicy(nn.Module):
         hidden_dim: int = 128,
         n_hidden_layers: int = 2,
         n_segments: int = 20,
-        n_controls: int = 2,  # Typically 2 for single qubit (X, Y)
+        n_controls: int = 2,  
         output_scale: float = 1.0,
         activation: str = 'tanh'
     ):
@@ -78,7 +74,6 @@ class GammaPulsePolicy(nn.Module):
 
         self.network = nn.Sequential(*layers)
 
-        # Initialize weights
         self._init_weights()
 
     def _get_activation(self, name: str) -> nn.Module:
@@ -114,13 +109,10 @@ class GammaPulsePolicy(nn.Module):
         if single_input:
             task_features = task_features.unsqueeze(0)
 
-        # Forward pass
         output = self.network(task_features)
 
-        # Reshape to (batch, n_segments, n_controls)
-        controls = output.view(-1, self.n_segments, self.n_controls)
 
-        # Scale outputs
+        controls = output.view(-1, self.n_segments, self.n_controls)
         controls = self.output_scale * controls
 
         if single_input:
@@ -170,14 +162,12 @@ class GammaTaskFeatureEncoder(nn.Module):
         self.use_fourier = use_fourier
 
         if use_fourier:
-            # Random Fourier features
             self.register_buffer(
                 'B',
                 torch.randn(raw_dim, feature_dim // 2) * fourier_scale
             )
             final_dim = feature_dim
         else:
-            # Simple MLP encoder
             self.encoder = nn.Sequential(
                 nn.Linear(raw_dim, 32),
                 nn.ReLU(),
@@ -204,7 +194,6 @@ class GammaTaskFeatureEncoder(nn.Module):
             encoded = self.encoder(raw_features)
 
         return encoded
-
 
 def create_gamma_policy(
     config: dict,
@@ -237,52 +226,4 @@ def create_gamma_policy(
 
     return policy
 
-
-PulsePolicy = GammaPulsePolicy
-
-
-# Example usage
-if __name__ == "__main__":
-    print("=" * 60)
-    print("Gamma Policy Network - Example Usage")
-    print("=" * 60)
-
-    # Create policy for gamma features
-    policy = GammaPulsePolicy(
-        task_feature_dim=3,
-        hidden_dim=64,
-        n_hidden_layers=2,
-        n_segments=20,
-        n_controls=2,
-        output_scale=0.5
-    )
-
-    print(f"\nPolicy architecture:\n{policy}")
-    print(f"\nTotal parameters: {policy.count_parameters():,}")
-
-    # Test forward pass with gamma features 
-    gamma_deph = 0.05  # Typical dephasing rate
-    gamma_relax = 0.025  # Typical relaxation rate
-    task_features = torch.tensor([
-        gamma_deph / 0.1,
-        gamma_relax / 0.05,
-        (gamma_deph + gamma_relax) / 0.15
-    ])
-
-    controls = policy(task_features)
-
-    print(f"\nGamma values: γ_deph={gamma_deph}, γ_relax={gamma_relax}")
-    print(f"Task features (normalized): {task_features}")
-    print(f"Output controls shape: {controls.shape}")
-    print(f"Control range: [{controls.min():.3f}, {controls.max():.3f}]")
-
-    # Batch forward
-    batch_gamma = torch.tensor([
-        [0.02 / 0.1, 0.01 / 0.05, 0.03 / 0.15],  # Low noise
-        [0.05 / 0.1, 0.025 / 0.05, 0.075 / 0.15],  # Medium noise
-        [0.10 / 0.1, 0.05 / 0.05, 0.15 / 0.15],  # High noise
-        [0.15 / 0.1, 0.08 / 0.05, 0.23 / 0.15],  # Very high noise
-    ])
-    batch_controls = policy(batch_gamma)
-    print(f"\nBatch input shape: {batch_gamma.shape}")
-    print(f"Batch output shape: {batch_controls.shape}")
+PulsePolicy = GammaPulsePolicy 
