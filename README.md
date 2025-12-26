@@ -181,37 +181,14 @@ All experiments are organized by figure number. Each script uses fixed random se
 
 ### Running Figure Generation Script
 
+Higlights general structure for running script. 
 ```bash
-# Set environment variable to avoid OpenMP conflicts (macOS)
-export KMP_DUPLICATE_LIB_OK=TRUE
+#  
 
 # Figure 3: Adaptation Gap Analysis
 python -u experiments/fig_3_adaptation_gap_analysis/generate_adaptation_gap_figure_gamma_checkpoint.py \
     --checkpoint checkpoints/checkpoints_gamma/maml_gamma_pauli_x.pt \
     --n_tasks 60 --max_K 30 --inner_lr 0.0001
-
-# Figure 3 (with actual variance):
-python -u experiments/fig_3_adaptation_gap_analysis/generate_adaptation_gap_figure_actual_variance.py \
-    --checkpoint checkpoints/checkpoints_gamma/maml_gamma_pauli_x.pt \
-    --n_tasks 60 --max_K 30 --inner_lr 0.0001
-
-# Figure 4: Adaptation Dynamics
-python -u experiments/fig_4_adaptation_dynamics/adaptation_dynamics_figure_gamma_checkpoint.py \
-    --checkpoint checkpoints/checkpoints_gamma/maml_gamma_pauli_x.pt \
-    --max_K 50 --n_tasks 50 --K_adapt 50 --inner_lr 0.001 \
-    --ood_gamma_deph 0.30 --ood_gamma_relax 0.16
-
-# Figure A3: LR Sensitivity
-python -u experiments/figs_appendix_ablations/fig_a3_adaptation_lr/generate_lr_sensitivity_figure_gamma_checkpoint.py \
-    --n_tasks 30 --max_K 25
-
-# Figure A5: Baseline Comparison
-python -u experiments/figs_appendix_ablations/fig_a5_baselines/generate_baseline_comparison_gamma_checkpoint.py \
-    --n_tasks 50 --K_adapt 1 --inner_lr 0.001 --diverse
-
-# Task Variance Correlation
-python -u experiments/fig_task_variance_correlation/generate_task_variance_figure.py \
-    --n_tasks 50 --n_spread_levels 15
 ```
 
 ## Key Results
@@ -229,39 +206,10 @@ Where:
 - `β` is the adaptation rate (depends on inner learning rate)
 - `K` is the number of adaptation steps
 
-**Empirical Results:**
-- Panel (a): c ≈ 0.006, β ≈ 0.18, R² = 0.99
-- Panel (b): G_∞ scales linearly with task variance σ²_τ, R² = 0.94
-
-### Baseline Comparison (K=1 adaptation)
-
-| Method | K=0 Fidelity | K=1 Fidelity | Improvement |
-|--------|--------------|--------------|-------------|
-| MAML | 91.80% | 93.25% | +1.45% |
-| Fixed Avg | 73.94% | 81.39% | +7.45% |
-
-**MAML advantage at K=1: +11.86%** (93.25% vs 81.39%)
-
-### Training Results
-
-| Checkpoint | Iterations | Best Fidelity |
-|------------|------------|---------------|
-| v2 | 300 | 97.84% ± 0.51% |
-| v3 | 700 | 98.92% ± 0.26% |
-| v4 | 2000 | 99.23% ± 0.16% |
-
-## Algorithm Overview
 
 
 
-Where `compute_loss`:
-1. Generates control pulses from policy
-2. Simulates Lindblad dynamics with decoherence
-3. Computes gate fidelity
-4. Returns `loss = 1 - fidelity`
-
-## Two Task Parameterizations
-
+## Two Task Parameterizations 
 ### Gamma-Rate Parameterization (Recommended)
 
 Tasks are parameterized by direct Lindblad decoherence rates:
