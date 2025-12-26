@@ -188,23 +188,10 @@ All experiments are organized by figure number. Each script uses fixed random se
 | Fig. 3 | `experiments/fig_3_adaptation_gap_analysis/generate_adaptation_gap_figure_gamma_checkpoint.py` | Adaptation gap analysis (exponential saturation + task diversity scaling) |
 | Fig. 3 (alt) | `experiments/fig_3_adaptation_gap_analysis/generate_adaptation_gap_figure_actual_variance.py` | Adaptation gap with actual task variance |
 | Fig. 4 | `experiments/fig_4_adaptation_dynamics/adaptation_dynamics_figure_gamma_checkpoint.py` | Adaptation dynamics over K steps |
-| Fig. 5 | `experiments/fig_5_meta_training/train_meta_gamma.py` | Meta-training results |
+| Fig. 5 | `experiments/fig_5_meta_training/generate_cz_adaptation_gap_figure_fast.py` | Two Qubit gate results |
 
-### Appendix Figures
 
-| Figure | Script | Description |
-|--------|--------|-------------|
-| Fig. A1-A2 | `experiments/figs_appendix_classical/fig_a1_a2_lqr.py` | Classical LQR baseline |
-| Fig. A3 | `experiments/figs_appendix_ablations/fig_a3_adaptation_lr/generate_lr_sensitivity_figure_gamma_checkpoint.py` | Inner learning rate sensitivity |
-| Fig. A4 | `experiments/figs_appendix_ablations/fig_a4_adaptation_steps/generate_adaptation_steps_figure_gamma_checkpoint.py` | Adaptation steps (K) analysis |
-
-### Supplementary Analysis
-
-| Analysis | Script | Description |
-|----------|--------|-------------|
-| Task Variance | `experiments/fig_task_variance_correlation/generate_task_variance_figure.py` | Task variance vs loss variance correlation |
-
-### Running Figure Generation Scripts
+### Running Figure Generation Script
 
 ```bash
 # Set environment variable to avoid OpenMP conflicts (macOS)
@@ -277,29 +264,7 @@ Where:
 
 ## Algorithm Overview
 
-The MAML training loop:
 
-```
-for iteration in 1..N:
-    # Sample batch of tasks (noise configurations)
-    tasks = sample_tasks(task_distribution, batch_size)
-
-    for task in tasks:
-        # Clone meta-parameters
-        adapted_policy = clone(meta_policy)
-
-        # Inner loop: K gradient steps on support set
-        for k in 1..K:
-            loss = compute_loss(adapted_policy, task.support)
-            adapted_policy = gradient_step(adapted_policy, loss, inner_lr)
-
-        # Evaluate adapted policy on query set
-        query_loss = compute_loss(adapted_policy, task.query)
-        accumulate_meta_gradient(meta_policy, query_loss)
-
-    # Meta-update
-    meta_policy = gradient_step(meta_policy, meta_loss, meta_lr)
-```
 
 Where `compute_loss`:
 1. Generates control pulses from policy
