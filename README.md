@@ -25,7 +25,8 @@ meta-quantum-control/
 │   │   ├── lindblad.py           # NumPy Lindblad simulator
 │   │   ├── lindblad_torch.py     # Differentiable PyTorch simulator
 │   │   ├── gates.py              # Fidelity computation
-│   │   ├── noise_models_v2.py    # Noise PSD models
+│   │   ├── noise_models_v2.py    # Noise PSD models v2 
+│   │   ├── noise_models.py       # Noise PSD models
 │   │   ├── noise_models_gamma.py # Gamma-rate noise models
 │   │   └── noise_adapter.py      # PSD to Lindblad conversion
 │   ├── theory/                   # Theoretical analysis
@@ -35,18 +36,22 @@ meta-quantum-control/
 │   └── utils/                    # Utilities
 │       ├── checkpoint_utils.py   # Model saving/loading
 │       └── plot_training.py      # Visualization
+│       └── plots.py              # plotting general
 ├── experiments/                  # Reproducible experiment scripts
+│   ├── fig_2_lemma_validation/
 │   ├── fig_3_adaptation_gap_analysis/
 │   ├── fig_4_adaptation_dynamics/
-│   ├── fig_5_meta_training/
+│   ├── fig_5_two_qubit_cz/
 │   ├── fig_task_variance_correlation/
 │   └── figs_appendix_ablations/
+│   └── fig_appendix_meta_training/
+│   └── figs_appendix_classical/
+│   └── fig_appendix_maml_vs_grape/ 
 ├── configs/                      # Configuration files
 │   ├── experiment_config.yaml         # PSD-based config
 │   └── experiment_config_gamma.yaml   # Gamma-rate config
 ├── checkpoints/                  # Saved model weights
 │   └── checkpoints_gamma/        # Gamma-trained checkpoints
-└── tests/                        # Unit tests
 ```
 
 ## Installation
@@ -54,29 +59,6 @@ meta-quantum-control/
 ### Prerequisites
 
 This project uses [uv](https://github.com/astral-sh/uv) for dependency management.
-
-```bash
-# Install uv (Mac/Linux)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install uv (Windows)
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-### Setup
-
-```bash
-# Clone the repository
-cd meta-quantum-control
-
-# Install dependencies
-export UV_NATIVE_TLS=true
-uv sync --all-groups
-
-# Activate the virtual environment
-source .venv/bin/activate  # Mac/Linux
-.venv\Scripts\activate     # Windows
-```
 
 ### Dependencies
 
@@ -215,7 +197,6 @@ All experiments are organized by figure number. Each script uses fixed random se
 | Fig. A1-A2 | `experiments/figs_appendix_classical/fig_a1_a2_lqr.py` | Classical LQR baseline |
 | Fig. A3 | `experiments/figs_appendix_ablations/fig_a3_adaptation_lr/generate_lr_sensitivity_figure_gamma_checkpoint.py` | Inner learning rate sensitivity |
 | Fig. A4 | `experiments/figs_appendix_ablations/fig_a4_adaptation_steps/generate_adaptation_steps_figure_gamma_checkpoint.py` | Adaptation steps (K) analysis |
-| Fig. A5 | `experiments/figs_appendix_ablations/fig_a5_baselines/generate_baseline_comparison_gamma_checkpoint.py` | Baseline comparisons (MAML vs Fixed Avg) |
 
 ### Supplementary Analysis
 
