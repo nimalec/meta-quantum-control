@@ -68,7 +68,7 @@ uv run train_meta_gamma.py --config ../../configs/experiment_config_gamma.yaml
 ```
 
 This will:
-1. Train a FOMAML policy for single-qubit X-gate control under Lindblad decoherence
+1. Train a FOMAML policy for single-qubit and two-qubit control using a Lindblad simulator to capture decoherence effects. 
 2. Save checkpoints to `checkpoints_gamma/`
 3. Log training metrics to `checkpoints_gamma/training_history.json`
 4. Display training progress with pre/post-adaptation validation metrics
@@ -190,49 +190,6 @@ python -u experiments/fig_3_adaptation_gap_analysis/generate_adaptation_gap_figu
     --checkpoint checkpoints/checkpoints_gamma/maml_gamma_pauli_x.pt \
     --n_tasks 60 --max_K 30 --inner_lr 0.0001
 ```
-
-## Key Results
-
-### Adaptation Gap Scaling Laws
-
-The adaptation gap G_K follows an exponential saturation:
-
-```
-G_K = c × (1 - exp(-β × K))
-```
-
-Where:
-- `c` is the asymptotic gap (task-dependent)
-- `β` is the adaptation rate (depends on inner learning rate)
-- `K` is the number of adaptation steps
-
-
-
-
-## Two Task Parameterizations 
-### Gamma-Rate Parameterization (Recommended)
-
-Tasks are parameterized by direct Lindblad decoherence rates:
-- `γ_deph`: Dephasing rate (T2* decay)
-- `γ_relax`: Relaxation rate (T1 decay)
-
-Task features are normalized: `[γ_deph/0.1, γ_relax/0.05, (γ_deph+γ_relax)/0.15]`
-
-**Advantages:**
-- Direct physical interpretation
-- Simpler task distribution
-- Better for out-of-distribution generalization
-
-### PSD-Based Parameterization
-
-Tasks are parameterized by noise power spectral density:
-- `α`: Spectral exponent (1/f^α noise)
-- `A`: Noise amplitude
-- `ω_c`: Cutoff frequency
-
-Task features: `[α, A, ω_c]`
-
-**Use case:** When studying colored noise with specific spectral properties.
 
 ## Citation
 
