@@ -1,8 +1,6 @@
 """
 Lindblad Master Equation Simulator
 
-Implements equation (3.1):
-ρ̇(t) = -i[H₀ + Σₖ uₖ(t)Hₖ, ρ(t)] + Σⱼ (Lⱼ,θ ρ L†ⱼ,θ - ½{L†ⱼ,θ Lⱼ,θ, ρ})
 """
 
 import numpy as np
@@ -51,7 +49,6 @@ class LindbladSimulator:
         self.n_controls = len(H_controls)
         self.n_lindblad = len(L_operators)
         
-        # Precompute commutator terms
         self.anti_commutators = [
             L.conj().T @ L for L in L_operators
         ]
@@ -74,8 +71,6 @@ class LindbladSimulator:
             H_total += u_k * self.H_controls[k]
         
         hamiltonian_term = -1j * (H_total @ rho - rho @ H_total)
-        
-        # Dissipation: Σⱼ (Lⱼ ρ L†ⱼ - ½{L†ⱼLⱼ, ρ})
         dissipation_term = np.zeros_like(rho)
         for j, L_j in enumerate(self.L_operators):
             dissipation_term += (
@@ -137,8 +132,7 @@ class LindbladSimulator:
     
     def _expm_step(self, rho: np.ndarray, u: np.ndarray, dt: float) -> np.ndarray:
         """Single step using matrix exponential (Magnus expansion)."""
-        # Build superoperator for this control
-        # ρ̇ = L[ρ] → vectorized: d/dt vec(ρ) = L_super vec(ρ)
+        # Build superoperator for this control 
         L_super = self._build_superoperator(u)
         rho_vec = rho.flatten()
         rho_vec_new = expm(L_super * dt) @ rho_vec
@@ -146,8 +140,7 @@ class LindbladSimulator:
     
     def _build_superoperator(self, u: np.ndarray) -> np.ndarray:
         """
-        Build superoperator L such that vec(ρ̇) = L vec(ρ).
-        Using vec(AρB) = (B^T ⊗ A) vec(ρ).
+        Build superoperator. 
         """
         d2 = self.d ** 2
         L_super = np.zeros((d2, d2), dtype=complex)
@@ -178,13 +171,11 @@ class LindbladSimulator:
         
         Returns:
             choi: Choi matrix (d² x d²)
-        """
-        # Evolve maximally entangled state |Φ⁺⟩⟨Φ⁺|
+        """ 
         d = self.d
         phi_plus = np.eye(d).flatten() / np.sqrt(d)
         rho_entangled = np.outer(phi_plus, phi_plus.conj())
-        
-        # Alternative: Build from basis evolution
+         
         choi = np.zeros((d**2, d**2), dtype=complex)
         for i in range(d):
             for j in range(d):
@@ -231,14 +222,12 @@ class LindbladJAX:
     @jit
     def evolve_step(self, rho, u, L_ops: List):
         """Single time step evolution with controls u and Lindblad operators L_ops."""
-        # Hamiltonian part
         H_total = self.H0
         for k, H_k in enumerate(self.H_controls):
             H_total = H_total + u[k] * H_k
         
         ham_term = -1j * (H_total @ rho - rho @ H_total)
         
-        # Dissipation part
         diss_term = jnp.zeros_like(rho)
         for L in L_ops:
             diss_term = diss_term + (
@@ -246,7 +235,6 @@ class LindbladJAX:
                 - 0.5 * (L.conj().T @ L @ rho + rho @ L.conj().T @ L)
             )
         
-        # Euler step (can upgrade to RK4)
         drho = ham_term + diss_term
         return rho + self.dt * drho
     
@@ -305,22 +293,10 @@ if __name__ == "__main__":
     rho_1 = np.outer(ket_1, ket_1.conj())
 
    
-    # # Target gates
-    # print("\nTarget gates:")
     gates = TargetGates()
-    
     X = gates.pauli_x()
-    rho_X = X @ rho_0 @ X.conj().T  
-    
-    
-    # gate_x_compute = GateFidelityComputer(X)
-    # achieved_fidelity = gate_x_compute.compute(rho_0) 
-    # print( achieved_fidelity)
+    rho_X = X @ rho_0 @ X.conj().T    
     fid = state_fidelity(rho_X,  rho_final)   
     print(fid)
     
-    # print("Initial state:")
-    # print(rho0)
-    # print("\nFinal state:")
-    # print(rho_final)
-    # print(f"\nPurity: {np.trace(rho_final @ rho_final).real:.4f}")
+
