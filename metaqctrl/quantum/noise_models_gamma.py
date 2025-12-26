@@ -8,29 +8,22 @@ from typing import Tuple, List, Dict, Optional
 from dataclasses import dataclass
 
 
-# ---------- Gamma Noise Parameters ----------
 @dataclass
 class GammaNoiseParameters:
     """
-    Markovian noise parameters for quantum systems.
+    Rate dependent dynamics parameters. 
 
     Attributes:
-        gamma_deph: Pure dephasing rate [1/s] (γ_φ in Lindblad equation)
-        gamma_relax: Relaxation rate [1/s] (Γ_↓ in Lindblad equation, T1 = 1/gamma_relax)
+        gamma_deph: Pure dephasing rate --> T2* 
+        gamma_relax: Relaxation rate  --> T1 
+      Total dephasing = gamma_deph + gamma_relax/2 
 
-    Physical interpretation:
-        - gamma_deph controls T2* decay (coherence loss)
-        - gamma_relax controls T1 decay (energy relaxation)
-        - Total dephasing: gamma_total = gamma_deph + gamma_relax/2
-
-    Normalization ranges (for neural network input):
+    Normalization for neural network input:
         - gamma_deph: [0.01, 0.2] → normalized by /0.1
         - gamma_relax: [0.005, 0.1] → normalized by /0.05
     """
-    gamma_deph: float   # Pure dephasing rate [1/s]
-    gamma_relax: float  # Relaxation rate [1/s]
-
-    # Default normalization scales (typical experimental ranges)
+    gamma_deph: float   
+    gamma_relax: float   
     GAMMA_DEPH_SCALE = 0.1    # Normalize by this value
     GAMMA_RELAX_SCALE = 0.05  # Normalize by this value
     GAMMA_SUM_SCALE = 0.15    # For sum feature
@@ -86,11 +79,11 @@ class GammaNoiseParameters:
         return cls(gamma_deph=gamma_deph, gamma_relax=gamma_relax)
 
     def get_T1(self) -> float:
-        """Get T1 relaxation time [s]."""
+        """Get T1 relaxation time """
         return 1.0 / self.gamma_relax if self.gamma_relax > 0 else float('inf')
 
     def get_T2_star(self) -> float:
-        """Get T2* dephasing time [s] (includes relaxation contribution)."""
+        """Get T2* dephasing time   (includes relaxation contribution)."""
         gamma_total = self.gamma_deph + self.gamma_relax / 2.0
         return 1.0 / gamma_total if gamma_total > 0 else float('inf')
 
@@ -99,28 +92,11 @@ class GammaNoiseParameters:
         return 1.0 / self.gamma_deph if self.gamma_deph > 0 else float('inf')
 
     def __repr__(self) -> str:
-        return f"GammaNoiseParameters(γ_deph={self.gamma_deph:.4f}, γ_relax={self.gamma_relax:.4f})"
-
-
-# ---------- Gamma Task Distribution ----------
+        return f"GammaNoiseParameters(γ_deph={self.gamma_deph:.4f}, γ_relax={self.gamma_relax:.4f})" 
+        
 class GammaTaskDistribution:
     """
-    Distribution P over gamma noise parameters.
-
-    Samples (gamma_deph, gamma_relax) pairs for meta-learning experiments.
-
-    Distribution types:
-        - 'uniform': Uniform over specified ranges
-        - 'log_uniform': Log-uniform (better for parameters spanning orders of magnitude)
-        - 'gaussian': Gaussian with specified mean and covariance
-
-    Example:
-        dist = GammaTaskDistribution(
-            dist_type='uniform',
-            gamma_deph_range=(0.02, 0.15),
-            gamma_relax_range=(0.01, 0.08)
-        )
-        tasks = dist.sample(n_tasks=10)
+    Distribution P over gamma noise parameters. 
     """
 
     def __init__(
@@ -239,8 +215,7 @@ class GammaTaskDistribution:
         Returns:
             variance: Total variance (useful for theory bounds)
         """
-        if self.dist_type in ["uniform", "log_uniform"]:
-            # Uniform variance: (b-a)^2 / 12
+        if self.dist_type in ["uniform", "log_uniform"]: 
             var_deph = ((self.effective_deph_range[1] - self.effective_deph_range[0]) ** 2) / 12.0
             var_relax = ((self.effective_relax_range[1] - self.effective_relax_range[0]) ** 2) / 12.0
             return float(var_deph + var_relax)
@@ -255,8 +230,6 @@ class GammaTaskDistribution:
         center_relax = (self.effective_relax_range[0] + self.effective_relax_range[1]) / 2.0
         return center_deph, center_relax
 
-
-# ---------- Gamma to Lindblad Operators ----------
 def gamma_to_lindblad_operators(
     gamma_deph: float,
     gamma_relax: float
@@ -264,96 +237,38 @@ def gamma_to_lindblad_operators(
     """
     Convert gamma rates directly to Lindblad jump operators.
 
-    This is the Markovian limit - no PSD integration needed.
-
     Args:
-        gamma_deph: Pure dephasing rate [1/s]
-        gamma_relax: Relaxation rate [1/s]
+        gamma_deph: Pure dephasing rate  
+        gamma_relax: Relaxation rate  
 
     Returns:
-        L_ops: List of Lindblad operators [√γ_relax σ-, √γ_deph σ_z/√2]
+        L_ops: List of Lindblad operators  
         rates: Array [gamma_relax, gamma_deph]
-
-    Physical meaning:
-        L_1 = √γ_relax |g⟩⟨e| (relaxation/decay)
-        L_2 = √γ_deph σ_z/√2 (pure dephasing)
-
-    Lindblad equation:
-        dρ/dt = -i[H, ρ] + Σ_k (L_k ρ L_k† - 1/2 {L_k† L_k, ρ})
-    """
-    # Relaxation operator: |g⟩⟨e| = σ-
-    L_relax = np.sqrt(gamma_relax) * np.array([[0, 1], [0, 0]], dtype=complex)
-
-    # Dephasing operator: σ_z / √2 (normalized)
-    L_deph = np.sqrt(gamma_deph / 2.0) * np.array([[1, 0], [0, -1]], dtype=complex)
-
+    """ 
+    L_relax = np.sqrt(gamma_relax) * np.array([[0, 1], [0, 0]], dtype=complex) 
+    L_deph = np.sqrt(gamma_deph / 2.0) * np.array([[1, 0], [0, -1]], dtype=complex) 
     L_ops = [L_relax, L_deph]
-    rates = np.array([gamma_relax, gamma_deph], dtype=float)
-
+    rates = np.array([gamma_relax, gamma_deph], dtype=float) 
     return L_ops, rates
 
 
-# ---------- Conversion utilities ----------
+
 def psd_to_gamma_approximate(alpha: float, A: float, omega_c: float, T: float = 1.0) -> Tuple[float, float]:
     """
     Approximate conversion from PSD parameters to gamma rates.
 
-    This is a rough approximation for reference - the actual relationship
-    depends on the filter function and integration details.
-
-    For 1/f^alpha noise:
-        gamma_deph ~ A * T^(alpha-1) / omega_c^alpha (rough scaling)
-        gamma_relax ~ A / omega_c^alpha (depends on omega_0)
 
     Args:
         alpha: PSD spectral exponent
         A: PSD amplitude
         omega_c: PSD cutoff frequency
-        T: Gate time [s]
+        T: Gate time 
 
     Returns:
         gamma_deph: Approximate dephasing rate
         gamma_relax: Approximate relaxation rate
-
-    Note: This is for reference only. For accurate results, use the
-    full PSD-to-Lindblad conversion in noise_models_v2.py.
     """
-    # Very rough approximation
+ 
     gamma_deph = A * 0.0078  # Empirical scaling factor
     gamma_relax = gamma_deph * 0.5  # Typical ratio
-    return gamma_deph, gamma_relax
-
-
-# ---------- Example usage ----------
-if __name__ == "__main__":
-    print("=" * 60)
-    print("Gamma Noise Models - Example Usage")
-    print("=" * 60)
-
-    # 1) Create task distribution
-    task_dist = GammaTaskDistribution(
-        dist_type="uniform",
-        gamma_deph_range=(0.02, 0.15),
-        gamma_relax_range=(0.01, 0.08)
-    )
-
-    # 2) Sample tasks
-    rng = np.random.default_rng(42)
-    tasks = task_dist.sample(5, rng)
-
-    print("\nSampled tasks:")
-    for i, t in enumerate(tasks):
-        arr = t.to_array(normalized=True)
-        print(f"  Task {i}: γ_deph={t.gamma_deph:.4f}, γ_relax={t.gamma_relax:.4f}")
-        print(f"           T1={t.get_T1():.2f}s, T2*={t.get_T2_star():.2f}s")
-        print(f"           Features (normalized): {arr}")
-
-    # 3) Get Lindblad operators
-    print("\nLindblad operators for Task 0:")
-    L_ops, rates = gamma_to_lindblad_operators(tasks[0].gamma_deph, tasks[0].gamma_relax)
-    print(f"  Rates: γ_relax={rates[0]:.4f}, γ_deph={rates[1]:.4f}")
-    print(f"  L_relax shape: {L_ops[0].shape}")
-    print(f"  L_deph shape: {L_ops[1].shape}")
-
-    # 4) Variance for theory bounds
-    print(f"\nDistribution variance: {task_dist.compute_variance():.6f}")
+    return gamma_deph, gamma_relax 
