@@ -29,10 +29,7 @@ meta-quantum-control/
 │   │   ├── noise_models.py       # Noise PSD models
 │   │   ├── noise_models_gamma.py # Gamma-rate noise models
 │   │   └── noise_adapter.py      # PSD to Lindblad conversion
-│   ├── theory/                   # Theoretical analysis
-│   │   ├── quantum_environment.py    # Unified simulation interface
-│   │   ├── optimality_gap.py         # Gap analysis
-│   │   └── physics_constants.py      # Spectral gap computation
+│   │   └──  quantum_environment.py    # Unified simulation interface  
 │   └── utils/                    # Utilities
 │       ├── checkpoint_utils.py   # Model saving/loading 
 ├── experiments/                  # Reproducible experiment scripts
