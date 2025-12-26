@@ -1,17 +1,10 @@
 """
 Gate Fidelity Computation
-
-Implements various fidelity measures:
-- State fidelity: F(ρ, σ) = tr(√(√ρ σ √ρ))²
-- Gate/process fidelity: F(Φ, Ψ) = tr(Φ†Ψ) / d²
-- Average gate fidelity
 """
 
 import numpy as np
 from scipy.linalg import sqrtm
 from typing import Tuple, Optional
-
-# Optional JAX support
 try:
     import jax.numpy as jnp
     from jax import jit
@@ -24,9 +17,8 @@ except ImportError:
 
 def state_fidelity(rho: np.ndarray, sigma: np.ndarray) -> float:
     """Good. 
-    Compute quantum state fidelity F(ρ, σ) = [tr(√(√ρ σ √ρ))]².
+    Compute quantum state fidelity. 
     
-    For pure states: F = |⟨ψ|φ⟩|²
     
     Args:
         rho: Density matrix 1
@@ -233,31 +225,13 @@ class TargetGates:
     
     @staticmethod
     def arbitrary_unitary(alpha: float, beta: float, gamma: float) -> np.ndarray:
-        """Good.
+        """ 
         Arbitrary single-qubit unitary via Euler angles.
-        U = Rz(γ) Ry(β) Rz(α)
         """
         Rz_alpha = TargetGates.rotation_z(alpha)
         Ry_beta = TargetGates.rotation_y(beta)
         Rz_gamma = TargetGates.rotation_z(gamma)
         return Rz_gamma @ Ry_beta @ Rz_alpha
-
-    @staticmethod
-    def cnot() -> np.ndarray:
-        """CNOT (controlled-NOT) gate for 2 qubits.
-
-        Control on qubit 0, target on qubit 1.
-        |00⟩ → |00⟩
-        |01⟩ → |01⟩
-        |10⟩ → |11⟩
-        |11⟩ → |10⟩
-        """
-        return np.array([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-            [0, 0, 0, 1],
-            [0, 0, 1, 0]
-        ], dtype=complex)
 
 
 # JAX versions for fast autodiff
@@ -282,43 +256,3 @@ else:
     def gate_infidelity_jax(rho_final, rho_target) -> float:
         """JAX implementation not available. Use numpy version."""
         raise ImportError("JAX is not installed. Install with: pip install jax jaxlib")
-
-
-# Example usage
-if __name__ == "__main__":
-    # Test fidelity computation
-    #Good --> Should run fine, double check. 
-    print("Testing fidelity measures...")
-    
-    # Pure states
-    ket_0 = np.array([1, 0], dtype=complex)
-    ket_1 = np.array([0, 1], dtype=complex)
-    ket_plus = (ket_0 + ket_1) / np.sqrt(2)
-    
-    rho_0 = np.outer(ket_0, ket_0.conj())
-    rho_1 = np.outer(ket_1, ket_1.conj())
-    rho_plus = np.outer(ket_plus, ket_plus.conj())
-    
-    print(f"F(|0⟩, |0⟩) = {state_fidelity(rho_0, rho_0):.6f}")
-    print(f"F(|0⟩, |1⟩) = {state_fidelity(rho_0, rho_1):.6f}")
-    print(f"F(|0⟩, |+⟩) = {state_fidelity(rho_0, rho_plus):.6f}")
-    
-    # Target gates
-    print("\nTarget gates:")
-    gates = TargetGates()
-    
-    X = gates.pauli_x()
-    print(f"X gate:\n{X}")
-    
-    H = gates.hadamard()
-    rho_H = H @ rho_0 @ H.conj().T
-    print(f"\nH|0⟩ fidelity with |+⟩: {state_fidelity(rho_H, rho_plus):.6f}")
-    
-    # Rotation gates
-    Rx_pi = gates.rotation_x(np.pi)
-    print(f"\nRx(π) ≈ X? {np.allclose(Rx_pi, 1j * X)}")
-    
-    # Fidelity computer
-    fid_computer = GateFidelityComputer(rho_plus, fidelity_type='state')
-    achieved_fidelity = fid_computer.compute(rho_H)
-    print(f"\nFidelity computer: F = {achieved_fidelity:.6f}")
