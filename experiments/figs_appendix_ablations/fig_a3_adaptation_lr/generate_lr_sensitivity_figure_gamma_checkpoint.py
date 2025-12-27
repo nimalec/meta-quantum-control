@@ -1,6 +1,5 @@
 """
 Inner Learning Rate Sensitivity Ablation - Using Pretrained Gamma Checkpoint
-============================================================================
 """
 
 import sys
