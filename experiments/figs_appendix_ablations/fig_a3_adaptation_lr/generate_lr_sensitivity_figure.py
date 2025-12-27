@@ -1,6 +1,6 @@
 """
 Inner Learning Rate Sensitivity Ablation
-=========================================
+ 
 
 Generates adaptation gap curves G_K for different inner learning rates:
 alpha_inner in {0.001, 0.005, 0.01, 0.05, 0.1}
