@@ -765,7 +765,7 @@ def generate_adaptation_gap_figure(
         print(f"  Fit failed: {e}")
         c_fit, beta_fit, R2_a = 0, 0, 0
 
-    # Panel (b): G_∞ vs task diversity
+    # Panel (b) 
     print("\nPanel (b): Computing G_∞ vs task diversity...")
     diversity_scales = np.linspace(0.2, 2.0, 8)
     G_inf_values = []
