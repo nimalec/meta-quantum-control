@@ -1,6 +1,5 @@
 """
 Compact Composite Figure: Empirical Validation of Key Assumptions
-==================================================================
 
 Single figure with 3 panels for main paper:
 (a) PL Condition (Lemma 4.2)
@@ -140,9 +139,7 @@ def generate_lipschitz_data():
 
 
 
-# Panel (c): Control Separation
-# =============================================================================
-
+# Panel (c): Control Separation 
 def generate_control_separation_data():
     """Generate control separation validation data."""
     gamma_ref = (0.05, 0.02)
@@ -187,9 +184,8 @@ def generate_control_separation_data():
     return np.array(delta_gammas), np.array(delta_thetas)
 
 
-# =============================================================================
+
 # Generate All Data
-# =============================================================================
 
 print("Generating PL data...")
 np.random.seed(42)
@@ -204,44 +200,14 @@ np.random.seed(44)
 cs_gamma, cs_theta = generate_control_separation_data()
 
 
-
-# from matplotlib.patches import Patch 
-
-# fig, axes = plt.subplots(1, 3, figsize=(10, 3.2))
-
 # # --- Panel (a): PL Condition ---
 # ax = axes[0]
-
-
 
 from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 
 fig, axes = plt.subplots(1, 3, figsize=(10, 3.2))
 # --- Panel (a): PL Condition ---
-# ax = axes[0]
-# # PL bound 
-# mu = np.min(pl_gradsq / pl_subopt)  
-
-# # Create legend elements for both scatter and line
-# legend_elements = [
-#     Patch(facecolor='b', label='Task 1'),
-#     Patch(facecolor='r', label='Task 2'),
-#     Line2D([0], [0], color='k', linestyle='--', lw=1.5, label=rf'$\mu = {mu:.2f}$')
-# ]
-
-# #x_max = pl_subopt.max() * 1.1
-# x_max = 0.4 
-# x_line = np.linspace(0, x_max, 100)
-# ax.scatter(pl_subopt, pl_gradsq, c=pl_colors, s=15, alpha=0.5, edgecolors='none')
-# ax.plot(x_line, mu * x_line, 'k--', lw=1.5)
-# ax.set_xlabel(r'$\mathcal{L}(\theta) - \mathcal{L}^*$')
-# ax.set_ylabel(r'$\frac{1}{2}\|\nabla\mathcal{L}\|^2$')
-# ax.set_title('(a) PL Condition')
-# ax.set_xlim(0, x_max)
-# ax.set_ylim(0, None)
-# ax.grid(True, alpha=0.3)
-# ax.legend(handles=legend_elements, loc='upper left', framealpha=0.9)
 ax = axes[0]
 # PL bound 
 mu = np.min(pl_gradsq / pl_subopt)  
