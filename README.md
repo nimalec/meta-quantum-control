@@ -178,8 +178,6 @@ All experiments are organized by figure number. Each script uses fixed random se
 
 Higlights general structure for running script. 
 ```bash
-#  
-
 # Figure 3: Adaptation Gap Analysis
 python -u experiments/fig_3_adaptation_gap_analysis/generate_adaptation_gap_figure_gamma_checkpoint.py \
     --checkpoint checkpoints/checkpoints_gamma/maml_gamma_pauli_x.pt \
