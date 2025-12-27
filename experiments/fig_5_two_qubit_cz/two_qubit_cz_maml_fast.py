@@ -4,7 +4,7 @@ Two-Qubit CZ Gate MAML Experiment
 This script demonstrates MAML for quantum control on a 2-qubit system implementing
 a Controlled-Z (CZ) gate under varying noise conditions.
 
-CZ gate: |00⟩->|00⟩, |01⟩->|01⟩, |10⟩->|10⟩, |11⟩-> -|11⟩
+CZ gate: |00⟩ ==> |00⟩, |01⟩ --> 01⟩, |10⟩ --> |10⟩, |11⟩ -- >   -|11⟩
 
 """
 
@@ -23,13 +23,10 @@ from scipy.linalg import expm
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-# Set random seeds for reproducibility
 torch.manual_seed(42)
 np.random.seed(42)
 
-
-# Two-Qubit Quantum Operators
-
+# Two-Qubit Quantum Operators 
 # Pauli matrices
 sigma_x = np.array([[0, 1], [1, 0]], dtype=np.complex128)
 sigma_y = np.array([[0, -1j], [1j, 0]], dtype=np.complex128)
@@ -66,8 +63,7 @@ CZ_GATE = np.diag([1, 1, 1, -1]).astype(np.complex128)
 # For J=2.0: T_ideal = pi/4 ≈ 0.785
 J_COUPLING = 2.0  # Standard coupling
 CZ_IDEAL_GATE_TIME = np.pi / 4  # T = pi/4 for J=2.0   
-
-# Computational basis states
+ 
 ket_00 = np.array([1, 0, 0, 0], dtype=np.complex128)
 ket_01 = np.array([0, 1, 0, 0], dtype=np.complex128)
 ket_10 = np.array([0, 0, 1, 0], dtype=np.complex128)
@@ -144,12 +140,10 @@ class TwoQubitTaskDistribution:
             gamma_deph_1 = np.random.uniform(*self.effective_deph_range)
             gamma_relax_1 = np.random.uniform(*self.effective_relax_range)
 
-            if self.correlated:
-                # Correlated noise: both qubits have similar (but not identical) noise
+            if self.correlated: 
                 gamma_deph_2 = gamma_deph_1 * np.random.uniform(0.8, 1.2)
                 gamma_relax_2 = gamma_relax_1 * np.random.uniform(0.8, 1.2)
-            else:
-                # Independent noise
+            else: 
                 gamma_deph_2 = np.random.uniform(*self.effective_deph_range)
                 gamma_relax_2 = np.random.uniform(*self.effective_relax_range)
 
@@ -184,8 +178,7 @@ class TwoQubitLindbladSimulator:
         self.dim = 4  # 2-qubit Hilbert space
 
     def _lindbladian(self, rho: torch.Tensor, H: torch.Tensor) -> torch.Tensor:
-        """Compute Lindbladian superoperator: L(rho) = -i[H, rho] + dissipator."""
-        # Commutator: -i[H, rho]
+        """Compute Lindbladian superoperator: L(rho) = -i[H, rho] + dissipator.""" 
         comm = -1j * (H @ rho - rho @ H)  
         dissipator = torch.zeros_like(rho)
         for k, (L, gamma) in enumerate(zip(self.L_operators, self.gamma_rates)):
@@ -200,7 +193,7 @@ class TwoQubitLindbladSimulator:
     def forward(
         self,
         rho0: torch.Tensor,
-        control_sequence: torch.Tensor,  # Shape: (n_segments, n_controls)
+        control_sequence: torch.Tensor,   
         T: float,
     ) -> torch.Tensor:
         """
@@ -267,17 +260,14 @@ def create_two_qubit_simulator(
             torch.tensor(Z2, dtype=torch.complex64, device=device),  # u_z2
         ])
 
-    # Lindblad operators for each qubit  
     L_deph_1 = torch.tensor(Z1, dtype=torch.complex64, device=device)
     L_relax_1 = torch.tensor(Sm1, dtype=torch.complex64, device=device)
 
-    # Qubit 2: dephasing (Z) and relaxation (σ-)
     L_deph_2 = torch.tensor(Z2, dtype=torch.complex64, device=device)
     L_relax_2 = torch.tensor(Sm2, dtype=torch.complex64, device=device)
 
     L_operators = [L_deph_1, L_relax_1, L_deph_2, L_relax_2]
 
-    # Gamma rates (for dephasing, the rate in Lindblad is gamma/2 for L=Z)
     gamma_rates = torch.tensor([
         task_params.gamma_deph_1 / 2,  # Pure dephasing (factor of 1/2 for Z operator)
         task_params.gamma_relax_1,
@@ -294,7 +284,6 @@ def create_two_qubit_simulator(
     )
 
 
-# Single-qubit basis states for constructing two-qubit states
 ket_0 = np.array([1, 0], dtype=np.complex128)
 ket_1 = np.array([0, 1], dtype=np.complex128)
 ket_p = (ket_0 + ket_1) / np.sqrt(2)   # |+⟩
@@ -311,15 +300,6 @@ def average_gate_fidelity_cz(
 ) -> torch.Tensor:
     """
     Compute average gate fidelity for CZ gate using 12 input states.
-
-    Uses a comprehensive set of superposition states that are sensitive to
-    the CZ phase structure:
-    - |++⟩, |+−⟩, |−+⟩, |−−⟩ (X-basis products)
-    - |+i,+i⟩, |+i,−i⟩ (Y-basis products)
-    - |1+⟩, |1−⟩, |+1⟩, |−1⟩ (mixed basis)
-    - |00⟩, |11⟩ (computational basis endpoints)
-
-    This provides good coverage of the two-qubit state space for CZ characterization.
     """
     # Build 12 input states
     input_states = [
@@ -337,13 +317,13 @@ def average_gate_fidelity_cz(
         np.kron(ket_1, ket_1),   # |11⟩
     ]
 
-    # Compute target states: CZ @ input
+
     target_states = [CZ_GATE @ state for state in input_states]
 
     total_fidelity = torch.tensor(0.0, device=device)
 
     for psi, psi_target in zip(input_states, target_states):
-        # Initial pure state density matrix
+
         psi_t = torch.tensor(psi, dtype=torch.complex64, device=device)
         rho0 = torch.outer(psi_t, psi_t.conj())
 
@@ -377,7 +357,7 @@ class TwoQubitCZPolicy(nn.Module):
         hidden_dim: int = 256,  # Increased for 2-qubit complexity
         n_hidden_layers: int = 4,  # Deeper network
         n_segments: int = 20,  # Reduced for faster training
-        n_controls: int = 6,  # X1, Y1, X2, Y2, Z1, Z2 (with Z controls!)
+        n_controls: int = 6,  # X1, Y1, X2, Y2, Z1, Z2  
         output_scale: float = 1.0,
     ):
         super().__init__()
