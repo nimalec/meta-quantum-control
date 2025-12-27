@@ -5,12 +5,6 @@ Inner Learning Rate Sensitivity Ablation
 Generates adaptation gap curves G_K for different inner learning rates:
 alpha_inner in {0.001, 0.005, 0.01, 0.05, 0.1}
 
-Shows that the scaling law holds across learning rates, with beta parameter
-changing predictably with learning rate.
-
-FIXED: Now uses PSD-based task representation (alpha, A, omega_c)
-matching the meta-training setup.
-
 Usage:
     python generate_lr_sensitivity_figure.py
 """
@@ -139,7 +133,6 @@ def compute_adaptation_gap_vs_K(meta_policy, task_params_list, env, config,
 
 
 def exponential_saturation(K, A_inf, beta, G0=0):
-    """Exponential saturation model: G_K = G0 + A_inf(1 - e^(-beta*K))"""
     return G0 + A_inf * (1 - np.exp(-beta * K))
 
 
