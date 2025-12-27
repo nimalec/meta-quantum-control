@@ -1,5 +1,5 @@
 """
-Figure 4: Adaptation Dynamics using PRETRAINED gamma checkpoint.
+Figure 4: Adaptation Dynamics.
 Shows per-task adaptation dynamics, fidelity distributions, and pulse sequences. 
 """
 
