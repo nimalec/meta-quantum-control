@@ -1,12 +1,6 @@
 """
 Figure 4: Adaptation Dynamics using PRETRAINED gamma checkpoint.
-Shows per-task adaptation dynamics, fidelity distributions, and pulse sequences.
-
-Uses gamma parameterization (gamma_deph, gamma_relax) matching Fig 3 and training.
-
-Usage:
-    python adaptation_dynamics_figure_gamma_checkpoint.py
-    python adaptation_dynamics_figure_gamma_checkpoint.py --checkpoint checkpoints_gamma_v3/maml_gamma_pauli_x_best.pt
+Shows per-task adaptation dynamics, fidelity distributions, and pulse sequences. 
 """
 
 import sys
@@ -140,7 +134,6 @@ def train_robust_policy_gamma(n_iterations=300, inner_lr=0.001, device='cpu'):
 
     optimizer = optim.Adam(policy.parameters(), lr=inner_lr)
 
-    # Fixed at average gamma values (center of training distribution)
     avg_gamma_deph = 0.085  # (0.02 + 0.15) / 2
     avg_gamma_relax = 0.045  # (0.01 + 0.08) / 2
 
@@ -163,9 +156,6 @@ def generate_panel_a_data(meta_policy, robust_policy, max_K=50, inner_lr=0.001, 
     """
     Panel (a): Loss vs K for different initializations on a challenging task.
     Shows exponential convergence with different starting points.
-
-    Training distribution: gamma_deph in [0.02, 0.15], gamma_relax in [0.01, 0.08]
-    Default: gamma_deph=1.05 (7× max), gamma_relax=0.56 (7× max)
     """
     print("Generating Panel (a) data: Loss vs K...")
     print(f"  Challenging task: gamma_deph={ood_gamma_deph}, gamma_relax={ood_gamma_relax}")
@@ -174,13 +164,11 @@ def generate_panel_a_data(meta_policy, robust_policy, max_K=50, inner_lr=0.001, 
     torch.manual_seed(42)
     np.random.seed(42)
 
-    # Challenging task: beyond training distribution
     test_gamma_deph = ood_gamma_deph
     test_gamma_relax = ood_gamma_relax
 
     losses_by_init = {}
 
-    # 1. Meta-learned policy
     meta_adapted = deepcopy(meta_policy)
     meta_adapted.train()
     opt = optim.Adam(meta_adapted.parameters(), lr=inner_lr)
@@ -201,7 +189,6 @@ def generate_panel_a_data(meta_policy, robust_policy, max_K=50, inner_lr=0.001, 
 
     losses_by_init[0] = {'losses': meta_losses, 'label': 'Meta-learned (MAML)'}
 
-    # 2. Robust baseline
     robust_adapted = deepcopy(robust_policy)
     robust_adapted.train()
     opt = optim.Adam(robust_adapted.parameters(), lr=inner_lr)
@@ -265,9 +252,8 @@ def generate_panel_b_data(meta_policy, robust_policy, n_tasks=50, K_adapt=10, in
 
     np.random.seed(123)
 
-    if ood_gamma_deph is not None and ood_gamma_relax is not None:
-        # Sample around the OOD point with some spread
-        spread_deph = 0.15  # ±15% spread
+    if ood_gamma_deph is not None and ood_gamma_relax is not None: 
+        spread_deph = 0.15   
         spread_relax = 0.15
         gamma_deph_vals = np.random.uniform(
             ood_gamma_deph * (1 - spread_deph),
@@ -297,7 +283,7 @@ def generate_panel_b_data(meta_policy, robust_policy, n_tasks=50, K_adapt=10, in
         if (i + 1) % 10 == 0:
             print(f"  Processing task {i+1}/{n_tasks}...")
 
-        # Robust policy (no adaptation)
+        
         with torch.no_grad():
             _, fid_robust = compute_loss_gamma(robust_policy, gamma_deph, gamma_relax, device, return_fidelity=True)
             fidelities['robust'].append(fid_robust.item())
@@ -335,7 +321,7 @@ def generate_panel_c_data(meta_policy, K_adapt=20, inner_lr=0.001, device='cpu',
 
     torch.manual_seed(42)
 
-    # Use OOD parameters if provided, else moderate noise
+
     if ood_gamma_deph is not None and ood_gamma_relax is not None:
         gamma_deph = ood_gamma_deph
         gamma_relax = ood_gamma_relax
@@ -407,8 +393,6 @@ def create_figure(losses_data, fidelity_data, pulse_data, save_path=None):
     """Create the 3-panel figure."""
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.5))
 
-    # Color palette - consistent scheme across panels
-    # Green=MAML, Red=Fixed, Orange=Random (not blue, to avoid confusion with Meta-init in b/c)
     colors_init = ['#2ecc71', '#e74c3c', '#e67e22']  # Meta=green, Fixed=red, Random=orange
 
     # --- Panel (a): Loss vs K (log scale) ---
@@ -464,13 +448,9 @@ def create_figure(losses_data, fidelity_data, pulse_data, save_path=None):
     n_segments = list(pulse_data.values())[0]['controls'].shape[0]
     t = np.linspace(0, 1, n_segments)
 
-    # More differentiated colors: Meta-init (blue), Meta-adapted (green)
-    # Skip random-adapted (index 2) to reduce clutter
-    colors_pulse = ['#3498db', '#2ecc71']  # Meta-init=blue, Meta-adapted=green
-    # Get K_adapt from pulse_data - it's the adaptation steps used
+    colors_pulse = ['#3498db', '#2ecc71']   
     K_adapt_val = 10  # Default
-    if '1' in pulse_data and 'label' in pulse_data['1']:
-        # Extract K from label if available
+    if '1' in pulse_data and 'label' in pulse_data['1']: 
         import re
         match = re.search(r'K=(\d+)', pulse_data['1'].get('label', ''))
         if match:
@@ -483,7 +463,6 @@ def create_figure(losses_data, fidelity_data, pulse_data, save_path=None):
         controls = data['controls']
         label = labels_pulse[i]
 
-        # Smooth the pulses using cubic spline interpolation
         from scipy.interpolate import make_interp_spline
         t_smooth = np.linspace(0, 1, 200)
         try:
@@ -492,7 +471,6 @@ def create_figure(losses_data, fidelity_data, pulse_data, save_path=None):
             controls_x_smooth = spl_x(t_smooth)
             controls_y_smooth = spl_y(t_smooth)
         except:
-            # Fallback to original if spline fails
             t_smooth = t
             controls_x_smooth = controls[:, 0]
             controls_y_smooth = controls[:, 1]
@@ -577,7 +555,6 @@ def main():
 
     create_figure(losses_data, fidelity_data, pulse_data, save_path=save_path)
 
-    # Save data
     json_path = str(output_dir / f"{args.output}_data.json")
     results = {
         'panel_a': {k: {'losses': v['losses'], 'label': v['label']} for k, v in losses_data.items()},
@@ -602,22 +579,16 @@ def main():
     print("Summary Statistics")
     print("=" * 70)
 
-    print("\nPanel (a) - Adaptation dynamics (OOD task):")
     for init_id, data in losses_data.items():
         initial_fid = 1 - data['losses'][0]
         final_fid = 1 - data['losses'][-1]
         improvement = final_fid - initial_fid
         print(f"  {data['label']:20s}: {initial_fid:.4f} -> {final_fid:.4f} (+{improvement:.4f})")
 
-    print("\nPanel (b) - Fidelity statistics:")
     for name, fids in fidelity_data.items():
         print(f"  {name:12s}: {np.mean(fids):.4f} +/- {np.std(fids):.4f}")
 
-    print("\nPanel (c) - Pulse sequences generated for all initializations")
 
-    print("\n" + "=" * 70)
-    print("Figure generation complete!")
-    print("=" * 70)
 
 
 if __name__ == "__main__":
