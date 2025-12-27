@@ -20,10 +20,6 @@ plt.rcParams.update({
 
 np.random.seed(42)
 
-# =============================================================================
-# System Definition: Mass-Spring-Damper
-# =============================================================================
-
 def get_system_matrices(mass, damping, stiffness):
     """
     Mass-spring-damper system: m*x'' + c*x' + k*x = u
@@ -75,12 +71,8 @@ def policy_gradient_step(K, A, B, Q, R, lr=0.1):
     # Solve for P (cost-to-go matrix)
     Q_cl = Q + K.T @ R @ K
     P = solve_lyapunov(A_cl.T, -Q_cl)
-    
-    # Solve for state covariance Σ (assuming unit initial covariance for gradient)
-    # In practice, Σ solves: A_cl Σ + Σ A_cl' + I = 0
     Sigma = solve_lyapunov(A_cl, -np.eye(A.shape[0]))
     
-    # Policy gradient: ∇_K J = 2(RK - B'P)Σ
     grad_K = 2 * (R @ K - B.T @ P) @ Sigma
     
     # Gradient descent
@@ -110,11 +102,6 @@ def adapt_controller(K_init, A, B, Q, R, n_steps, lr=0.1):
     
     return K, costs
 
-
-# =============================================================================
-# Experiment 1: Adaptation Gap vs K (Exponential Saturation)
-# =============================================================================
-
 def experiment_gap_vs_K():
     """Test exponential saturation of adaptation gap with K."""
     print("=" * 60)
@@ -135,7 +122,6 @@ def experiment_gap_vs_K():
     
     x0 = np.array([[1.0], [0.0]])
     
-    # Robust baseline: optimize for mean system
     A_mean, B_mean = get_system_matrices(mass_mean, damping, stiffness)
     K_robust, _ = solve_lqr(A_mean, B_mean, Q, R)
     
@@ -143,7 +129,6 @@ def experiment_gap_vs_K():
     print(f"Number of tasks: {n_tasks}")
     print(f"Robust controller gain: K_rob = {K_robust.flatten()}")
     
-    # Compute optimal controllers and costs for each task
     costs_robust = []
     costs_optimal = []
     K_optimal_list = []
@@ -162,7 +147,6 @@ def experiment_gap_vs_K():
     costs_robust = np.array(costs_robust)
     costs_optimal = np.array(costs_optimal)
     
-    # Maximum achievable gap (at K -> infinity)
     gap_infinity = np.mean(costs_robust - costs_optimal)
     print(f"\nAsymptotic gap (K→∞): {gap_infinity:.4f}")
     
@@ -195,7 +179,6 @@ def experiment_gap_vs_K():
     for k, g, s in zip(K_steps, mean_gaps, std_gaps):
         print(f"  K={k:2d}: Gap = {g:.4f} ± {s:.4f}")
     
-    # Fit scaling law: G_K = A_∞(1 - e^{-βK}) - ε_init * e^{-βK}
     def gap_scaling(K, A_inf, beta, eps_init):
         return A_inf * (1 - np.exp(-beta * K)) - eps_init * np.exp(-beta * K)
     
@@ -447,9 +430,7 @@ def experiment_gap_vs_variance():
     }
 
 
-# =============================================================================
-# Experiment 3: Controller Trajectories Visualization
-# =============================================================================
+
 
 def experiment_trajectory_comparison():
     """Visualize state trajectories for robust vs adapted controllers."""
@@ -469,7 +450,6 @@ def experiment_trajectory_comparison():
     A_mean, B_mean = get_system_matrices(mass_mean, damping, stiffness)
     K_robust, _ = solve_lqr(A_mean, B_mean, Q, R)
     
-    # Test on a specific off-nominal task
     mass_test = 1.4  # 40% heavier than nominal
     A_test, B_test = get_system_matrices(mass_test, damping, stiffness)
     
@@ -735,19 +715,8 @@ def create_summary_figure(results_K, results_var):
     plt.savefig('lqr_summary.png', dpi=300, bbox_inches='tight')
     plt.close()
     
-    print("Saved: lqr_summary.png")
 
-
-# =============================================================================
-# Main
-# =============================================================================
-
-if __name__ == "__main__":
-    print("\n" + "=" * 70)
-    print("LQR META-LEARNING VALIDATION")
-    print("Testing: Gap(K) ∝ σ²_S (1 - e^{-βK})")
-    print("=" * 70)
-    
+if __name__ == "__main__":    
     results_K = experiment_gap_vs_K()
     results_var = experiment_gap_vs_variance()
     experiment_trajectory_comparison()
