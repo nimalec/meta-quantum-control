@@ -1,10 +1,5 @@
 """
 Task Variance vs Loss Variance Correlation
-
-Shows that with a FIXED pulse sequence, the variance in the loss function
-is directly correlated with the variance in the task distribution.
-
-This demonstrates that task diversity drives the need for adaptation.
 """
 
 import sys
@@ -22,7 +17,7 @@ from metaqctrl.quantum.lindblad_torch import DifferentiableLindbladSimulator
 
 
 def basis_state(n: int, dim: int):
-    """Create a basis state |n> in dimension dim."""
+    """Create a basis state."""
     state = torch.zeros(dim, dtype=torch.complex64)
     state[n] = 1.0
     return state
@@ -63,10 +58,9 @@ def compute_fidelity(rho, target_state, device='cpu'):
 
 def evaluate_fixed_pulse_on_tasks(pulse_sequence, tasks, T=1.0, device='cpu'):
     """
-    Evaluate a FIXED pulse sequence on multiple tasks.
     Returns the loss (1 - fidelity) for each task.
     """
-    # Target: X gate on |0> -> |1>
+    # Target: X gate 
     initial_state = basis_state(0, 2).to(device)
     target_state = basis_state(1, 2).to(device)
     rho0 = torch.outer(initial_state, initial_state.conj())
@@ -84,7 +78,6 @@ def evaluate_fixed_pulse_on_tasks(pulse_sequence, tasks, T=1.0, device='cpu'):
 def sample_tasks_with_variance(n_tasks, center_deph, center_relax, spread, rng=None):
     """
     Sample tasks around a center point with specified spread (variance proxy).
-    spread: multiplier for range (e.g., 0.1 means ±10% of center)
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -111,11 +104,9 @@ def compute_task_variance(tasks):
     """Compute variance of task parameters."""
     gamma_deph = np.array([t[0] for t in tasks])
     gamma_relax = np.array([t[1] for t in tasks])
-
     # Combined variance (sum of individual variances, normalized)
     var_deph = np.var(gamma_deph)
     var_relax = np.var(gamma_relax)
-
     return var_deph + var_relax
 
 
@@ -130,24 +121,16 @@ def main():
     device = 'cpu'
     rng = np.random.default_rng(args.seed)
 
-    # Center point for task distribution
     center_deph = 0.10
     center_relax = 0.05
 
-    # Generate a FIXED pulse sequence (e.g., approximate X gate pulse)
-    # Using a simple constant pulse that gives reasonable fidelity
     T = 1.0
     n_segments = args.n_segments
 
-    # Fixed pulse: roughly π rotation around x-axis
     pulse_sequence = torch.zeros((n_segments, 2), dtype=torch.float32, device=device)
-    pulse_sequence[:, 0] = np.pi  # u_x = π for X gate
-    pulse_sequence[:, 1] = 0.0    # u_y = 0
+    pulse_sequence[:, 0] = np.pi  # u_x = pi ==> X gate
+    pulse_sequence[:, 1] = 0.0    # u_y = 0, local relative phase set to zero   
 
-    print(f"Using FIXED pulse sequence: constant u_x={np.pi:.3f}, u_y=0")
-    print(f"Evaluating on {args.n_spread_levels} spread levels with {args.n_tasks} tasks each\n")
-
-    # Spread levels from very narrow (0.01) to wide (0.8)
     spread_levels = np.linspace(0.01, 0.8, args.n_spread_levels)
 
     results = {
@@ -158,11 +141,7 @@ def main():
         'loss_stds': []
     }
 
-    print("Spread | Task Var | Loss Mean | Loss Var | Loss Std")
-    print("-" * 55)
-
     for spread in spread_levels:
-        # Sample tasks with this spread
         tasks = sample_tasks_with_variance(
             args.n_tasks, center_deph, center_relax, spread, rng
         )
@@ -196,10 +175,6 @@ def main():
     # Linear regression for task variance vs loss std
     slope_std, intercept_std, r_std, p_std, se_std = stats.linregress(task_vars, loss_stds)
 
-    print(f"\n{'='*55}")
-    print("Correlation Analysis:")
-    print(f"  Task Var vs Loss Var: R²={r_var**2:.4f}, slope={slope_var:.4f}")
-    print(f"  Task Var vs Loss Std: R²={r_std**2:.4f}, slope={slope_std:.4f}")
 
     # Create figure - single panel
     fig, ax = plt.subplots(1, 1, figsize=(6, 5))
@@ -218,7 +193,6 @@ def main():
     ax.legend(loc='upper left')
     ax.grid(True, alpha=0.3)
 
-    # Add R² annotation
     ax.text(0.95, 0.05, f'R² = {r_var**2:.4f}', transform=ax.transAxes,
             ha='right', va='bottom', fontsize=11,
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
@@ -241,7 +215,6 @@ def main():
     data_path = str(output_dir / "task_variance_correlation_data.json")
     with open(data_path, 'w') as f:
         json.dump(results, f, indent=2)
-    print(f"Data saved to: {data_path}")
 
 
 if __name__ == "__main__":
