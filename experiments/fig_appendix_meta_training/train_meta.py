@@ -99,8 +99,6 @@ def data_generator(
 
 
 def create_loss_function(env, device, config):
-    #Make a loss function .
-    """Create loss function using QuantumEnvironment."""
 
     dt = config.get('dt_training') 
     use_rk4 = config.get('use_rk4_training')   
@@ -133,9 +131,6 @@ def create_loss_function(env, device, config):
 
 
 def main(config_path: str):
-    """Main training loop."""
-    
-    # Load config
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
@@ -163,8 +158,7 @@ def main(config_path: str):
     else:
         raise ValueError(f"Unknown target gate: {target_gate_name}")
     
-    # Target state: U|0⟩
-    ## Establish target operation   
+    # Target state: U|0⟩ 
     ket_0 = np.array([1, 0], dtype=complex)
     target_state = np.outer(U_target @ ket_0, (U_target @ ket_0).conj())
     print(f"Target gate: {target_gate_name}")
