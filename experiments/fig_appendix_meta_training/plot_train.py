@@ -12,17 +12,6 @@ from typing import Dict, List
 def load_training_logs(log_path: str) -> Dict:
     """
     Load training logs from JSON file
-
-    Expected format:
-    {
-        'iterations': [0, 1, 2, ...],
-        'meta_loss': [...],
-        'support_loss': [...],
-        'query_loss': [...],
-        'val_fidelity': [...],
-        'grad_norms': [...],
-        'nan_count': [...]
-    }
     """
     if os.path.exists(log_path):
         with open(log_path, 'r') as f:
@@ -207,10 +196,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.show_snippet:
-        print("=" * 80)
-        print("CODE SNIPPET: Add to train_meta.py for logging")
-        print("=" * 80)
-        print("=" * 80)
+        pass
+
 
     generate_figure3(
         log_path=args.log_path,
