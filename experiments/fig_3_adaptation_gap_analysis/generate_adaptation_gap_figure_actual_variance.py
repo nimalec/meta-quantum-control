@@ -1,11 +1,5 @@
 """
-Figure 3: Adaptation Gap Analysis with ACTUAL Task Variance
-
-This script computes the actual variance of sampled task parameters
-(not just diversity_scale^2) for panel (b).
-
-Key difference from generate_adaptation_gap_figure_gamma_checkpoint.py:
-- Panel (b) uses actual np.var(gamma_dephs) + np.var(gamma_relaxs) as x-axis
+Figure 3: Adaptation Gap Analysis. 
 """
 import sys
 from pathlib import Path
@@ -42,7 +36,7 @@ def create_single_qubit_system(gamma_deph=0.05, gamma_relax=0.025, device='cpu')
     sigma_z = torch.tensor([[1, 0], [0, -1]], dtype=torch.complex64, device=device)
     sigma_p = torch.tensor([[0, 1], [0, 0]], dtype=torch.complex64, device=device)
 
-    H0 = 0.0 * sigma_z  # No drift Hamiltonian
+    H0 = 0.0 * sigma_z  
     H_controls = [sigma_x, sigma_y]
 
     L_operators = []
@@ -69,7 +63,6 @@ def compute_loss_gamma(policy, gamma_deph, gamma_relax, device='cpu'):
     """Compute loss using gamma-rate task features."""
     sim = create_single_qubit_system(gamma_deph, gamma_relax, device=device)
 
-    # Gamma task features: normalized rates
     task_features = torch.tensor([
         gamma_deph / 0.1,
         gamma_relax / 0.05,
@@ -83,7 +76,6 @@ def compute_loss_gamma(policy, gamma_deph, gamma_relax, device='cpu'):
 
     rho_final = sim.forward(rho0, controls, T=1.0)
 
-    # Target: |1><1| (Pauli-X gate on |0>)
     target = torch.zeros(2, 2, dtype=rho_final.dtype, device=device)
     target[1, 1] = 1.0
 
@@ -156,12 +148,12 @@ def compute_adaptation_gap_vs_K_gamma(robust_policy, task_params_list,
 
 
 def exponential_saturation(K, c, beta):
-    """Exponential saturation without offset: G_K = c*(1 - exp(-beta*K))"""
+    """Exponential saturation without offset """
     return c * (1 - np.exp(-beta * K))
 
 
 def fit_exponential_saturation(K_values, mean_gaps):
-    """Fit G_K = c*(1 - exp(-beta*K)) - no G0 offset term."""
+    """Fitter"""
     c_init = max(0.05, mean_gaps[-1] * 1.1)
     beta_init = 0.3
 
@@ -189,13 +181,8 @@ def fit_exponential_saturation(K_values, mean_gaps):
 
 def sample_gamma_tasks(n_tasks, diversity_scale=1.0, rng=None,
                        center_deph=None, center_relax=None):
-    """Sample gamma-rate tasks with UNIFORM distribution.
+    """Sample gamma-rate tasks with uniform distribution. 
 
-    Training used uniform over [0.02, 0.15] x [0.01, 0.08].
-    diversity_scale shrinks the range toward center for panel (b) analysis.
-
-    If center_deph/center_relax provided, samples around that center point
-    (for challenging/OOD task testing).
     """
     if rng is None:
         rng = np.random.default_rng(42)
@@ -212,7 +199,7 @@ def sample_gamma_tasks(n_tasks, diversity_scale=1.0, rng=None,
         deph_half = center_deph * 0.15 * diversity_scale
         relax_half = center_relax * 0.15 * diversity_scale
     else:
-        # Default: training distribution center
+   
         deph_center = (gamma_deph_range[0] + gamma_deph_range[1]) / 2
         relax_center = (gamma_relax_range[0] + gamma_relax_range[1]) / 2
         deph_half = (gamma_deph_range[1] - gamma_deph_range[0]) / 2 * diversity_scale
@@ -222,7 +209,7 @@ def sample_gamma_tasks(n_tasks, diversity_scale=1.0, rng=None,
     for _ in range(n_tasks):
         gamma_deph = rng.uniform(deph_center - deph_half, deph_center + deph_half)
         gamma_relax = rng.uniform(relax_center - relax_half, relax_center + relax_half)
-        # Clip to valid range (allow higher for challenging tasks)
+    
         gamma_deph = np.clip(gamma_deph, 0.001, 2.0)
         gamma_relax = np.clip(gamma_relax, 0.001, 1.0)
         tasks.append((gamma_deph, gamma_relax))
@@ -290,15 +277,12 @@ def generate_panel_b_data(robust_policy, n_tasks_per_diversity=15, K_adapt=20,
     if center_deph is not None:
         print(f"  Using challenging center: gamma_deph={center_deph}, gamma_relax={center_relax}")
 
-    # Larger diversity range for wider variance spread - gives R²~0.94
-    # Range 0.1-3.0 produces variance in [2e-05, 1e-02] - best linear fit
     diversity_scales = list(np.linspace(0.1, 3.0, 15))
 
     G_inf_means = []
     G_inf_stds = []
-    sigma_squared_values = []  # Will store ACTUAL variance
+    sigma_squared_values = []  
 
-    # Also track individual variances for debugging
     var_deph_values = []
     var_relax_values = []
 
@@ -309,7 +293,7 @@ def generate_panel_b_data(robust_policy, n_tasks_per_diversity=15, K_adapt=20,
         task_params_list = sample_gamma_tasks(n_tasks_per_diversity, diversity_scale=ds, rng=rng,
                                               center_deph=center_deph, center_relax=center_relax)
 
-        # Compute ACTUAL variance of task parameters
+    
         sigma_squared, var_deph, var_relax = compute_actual_task_variance(task_params_list)
 
         _, mean_gaps, std_gaps, _ = compute_adaptation_gap_vs_K_gamma(
@@ -366,12 +350,10 @@ def create_figure(panel_a_data, panel_b_data, save_path=None):
     ax.set_xlim(-0.5, K[-1] + 0.5)
     ax.grid(True, alpha=0.3)
     ax.legend(loc='lower right', fontsize=9)
-    # Add R^2 in top-left (away from legend)
     if 'R_squared' in panel_a_data and panel_a_data['R_squared'] is not None:
         ax.text(0.05, 0.95, f'$R^2 = {panel_a_data["R_squared"]:.3f}$', transform=ax.transAxes,
                 ha='left', va='top', fontsize=10)
 
-    # Panel (b) - Now using ACTUAL variance
     ax = axes[1]
     sigma_sq = panel_b_data['sigma_squared_values']
     G_inf = panel_b_data['G_inf_means']
@@ -386,13 +368,12 @@ def create_figure(panel_a_data, panel_b_data, save_path=None):
     ax.plot(sigma_sq_fine, fitted_line, '-', color='#e74c3c', linewidth=2,
             label=f'Linear fit')
 
-    # Use proper LaTeX for actual variance label
+
     ax.set_xlabel(r'Task Variance $\sigma^2_\tau = \mathrm{Var}(\gamma_{deph}) + \mathrm{Var}(\gamma_{relax})$')
     ax.set_ylabel('Asymptotic Gap $G_\\infty$')
     ax.set_title(f'(b) Gap vs Actual Task Variance')
     ax.grid(True, alpha=0.3)
     ax.legend(loc='lower right', fontsize=9)
-    # Add R^2 in top-left (away from legend)
     ax.text(0.05, 0.95, f'$R^2 = {R_sq:.3f}$', transform=ax.transAxes,
             ha='left', va='top', fontsize=10)
 
@@ -496,10 +477,6 @@ def main():
         json.dump(data_to_save, f, indent=2)
     print(f"Data saved to: {data_path}")
 
-    print("\n" + "=" * 60)
-    print("Summary Statistics (ACTUAL TASK VARIANCE)")
-    print("=" * 60)
-    print(f"\nPanel (a) - Exponential Saturation: G_K = c*(1-exp(-beta*K))")
     if panel_a_data['c'] is not None:
         print(f"  c = {panel_a_data['c']:.4f}")
         print(f"  beta = {panel_a_data['beta']:.4f}")
