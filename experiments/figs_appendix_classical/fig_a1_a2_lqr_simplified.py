@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
 
- 
 plt.rcParams.update({
     'font.size': 11,
     'axes.labelsize': 12,
@@ -20,13 +19,7 @@ plt.rcParams.update({
 
 np.random.seed(42)
 
-<<<<<<< HEAD:experiments/figs_appendix_classical/fig_a1_a2_lqr_simplified.py
 
-# System Definition: Mass-Spring-Damper
-
-
-=======
->>>>>>> c685adb75fe712a3c3ea87d8e5168d9eccadf23c:experiments/figs_appendix_classical/fig_a1_a2_lqr.py
 def get_system_matrices(mass, damping, stiffness):
     """
     Mass-spring-damper system: m*x'' + c*x' + k*x = u
@@ -78,16 +71,9 @@ def policy_gradient_step(K, A, B, Q, R, lr=0.1):
     # Solve for P (cost-to-go matrix)
     Q_cl = Q + K.T @ R @ K
     P = solve_lyapunov(A_cl.T, -Q_cl)
-<<<<<<< HEAD:experiments/figs_appendix_classical/fig_a1_a2_lqr_simplified.py
-
 
     Sigma = solve_lyapunov(A_cl, -np.eye(A.shape[0]))
 
-
-=======
-    Sigma = solve_lyapunov(A_cl, -np.eye(A.shape[0]))
-    
->>>>>>> c685adb75fe712a3c3ea87d8e5168d9eccadf23c:experiments/figs_appendix_classical/fig_a1_a2_lqr.py
     grad_K = 2 * (R @ K - B.T @ P) @ Sigma
 
     # Gradient descent
@@ -117,21 +103,12 @@ def adapt_controller(K_init, A, B, Q, R, n_steps, lr=0.1):
 
     return K, costs
 
-<<<<<<< HEAD:experiments/figs_appendix_classical/fig_a1_a2_lqr_simplified.py
-
-# Simplified Gap Scaling (no eps_init term)
-
 
 def gap_scaling(K, A_inf, beta):
     """Simplified gap scaling: G_K = A_inf * (1 - e^{-beta*K})"""
     return A_inf * (1 - np.exp(-beta * K))
 
 
-# Experiment 1: Adaptation Gap vs K (Exponential Saturation)
-
-
-=======
->>>>>>> c685adb75fe712a3c3ea87d8e5168d9eccadf23c:experiments/figs_appendix_classical/fig_a1_a2_lqr.py
 def experiment_gap_vs_K():
     """Test exponential saturation of adaptation gap with K."""
 
@@ -148,25 +125,15 @@ def experiment_gap_vs_K():
     masses = np.clip(masses, 0.4, 1.8)
 
     x0 = np.array([[1.0], [0.0]])
-<<<<<<< HEAD:experiments/figs_appendix_classical/fig_a1_a2_lqr_simplified.py
 
     # Robust baseline: optimize for mean system
     A_mean, B_mean = get_system_matrices(mass_mean, damping, stiffness)
     K_robust, _ = solve_lqr(A_mean, B_mean, Q, R)
 
-
-
-    # Compute optimal controllers and costs for each task
-=======
-    
-    A_mean, B_mean = get_system_matrices(mass_mean, damping, stiffness)
-    K_robust, _ = solve_lqr(A_mean, B_mean, Q, R)
-    
-    print(f"Task distribution: mass ~ N({mass_mean}, {mass_std}²)")
+    print(f"Task distribution: mass ~ N({mass_mean}, {mass_std}^2)")
     print(f"Number of tasks: {n_tasks}")
     print(f"Robust controller gain: K_rob = {K_robust.flatten()}")
-    
->>>>>>> c685adb75fe712a3c3ea87d8e5168d9eccadf23c:experiments/figs_appendix_classical/fig_a1_a2_lqr.py
+
     costs_robust = []
     costs_optimal = []
     K_optimal_list = []
@@ -184,14 +151,8 @@ def experiment_gap_vs_K():
 
     costs_robust = np.array(costs_robust)
     costs_optimal = np.array(costs_optimal)
-<<<<<<< HEAD:experiments/figs_appendix_classical/fig_a1_a2_lqr_simplified.py
 
-    # Maximum achievable gap (at K -> infinity)
-=======
-    
->>>>>>> c685adb75fe712a3c3ea87d8e5168d9eccadf23c:experiments/figs_appendix_classical/fig_a1_a2_lqr.py
     gap_infinity = np.mean(costs_robust - costs_optimal)
-
 
     # Simulate adaptation for varying K
     K_steps = [0, 1, 2, 3, 5, 7, 10, 15, 20, 30]
@@ -220,17 +181,8 @@ def experiment_gap_vs_K():
 
     print("\nGap vs K:")
     for k, g, s in zip(K_steps, mean_gaps, std_gaps):
-<<<<<<< HEAD:experiments/figs_appendix_classical/fig_a1_a2_lqr_simplified.py
         print(f"  K={k:2d}: Gap = {g:.4f} +/- {s:.4f}")
 
-
-=======
-        print(f"  K={k:2d}: Gap = {g:.4f} ± {s:.4f}")
-    
-    def gap_scaling(K, A_inf, beta, eps_init):
-        return A_inf * (1 - np.exp(-beta * K)) - eps_init * np.exp(-beta * K)
-    
->>>>>>> c685adb75fe712a3c3ea87d8e5168d9eccadf23c:experiments/figs_appendix_classical/fig_a1_a2_lqr.py
     # Initial guess
     p0 = [mean_gaps[-1], 0.3]
 
@@ -312,10 +264,6 @@ def experiment_gap_vs_K():
         'r_squared': r_squared,
         'task_variance': mass_std**2
     }
-
-
-
-# Experiment 2: Adaptation Gap vs Task Variance (Linear Scaling)
 
 
 def experiment_gap_vs_variance():
@@ -477,13 +425,6 @@ def experiment_gap_vs_variance():
     }
 
 
-
-<<<<<<< HEAD:experiments/figs_appendix_classical/fig_a1_a2_lqr_simplified.py
-# Experiment 3: Controller Trajectories Visualization
-
-=======
->>>>>>> c685adb75fe712a3c3ea87d8e5168d9eccadf23c:experiments/figs_appendix_classical/fig_a1_a2_lqr.py
-
 def experiment_trajectory_comparison():
     """Visualize state trajectories for robust vs adapted controllers."""
     print("\n" + "=" * 60)
@@ -501,12 +442,7 @@ def experiment_trajectory_comparison():
     # Robust controller (for mean mass)
     A_mean, B_mean = get_system_matrices(mass_mean, damping, stiffness)
     K_robust, _ = solve_lqr(A_mean, B_mean, Q, R)
-<<<<<<< HEAD:experiments/figs_appendix_classical/fig_a1_a2_lqr_simplified.py
 
-    # Test on a specific off-nominal task
-=======
-    
->>>>>>> c685adb75fe712a3c3ea87d8e5168d9eccadf23c:experiments/figs_appendix_classical/fig_a1_a2_lqr.py
     mass_test = 1.4  # 40% heavier than nominal
     A_test, B_test = get_system_matrices(mass_test, damping, stiffness)
 
@@ -602,9 +538,6 @@ def experiment_trajectory_comparison():
 
     print("\nSaved: lqr_trajectories_simplified.png")
 
-
-
-# Experiment 4: Combined Summary Figure
 
 def create_summary_figure(results_K, results_var):
     """Create a combined 2x2 summary figure for the paper."""
@@ -768,26 +701,17 @@ def create_summary_figure(results_K, results_var):
     plt.tight_layout()
     plt.savefig('lqr_summary_simplified.png', dpi=300, bbox_inches='tight')
     plt.close()
-<<<<<<< HEAD:experiments/figs_appendix_classical/fig_a1_a2_lqr_simplified.py
 
     print("Saved: lqr_summary_simplified.png")
 
 
-
-
-
 if __name__ == "__main__":
- 
-=======
-    
+    print("=" * 70)
+    print("LQR META-LEARNING VALIDATION (SIMPLIFIED MODEL)")
+    print("Testing: Gap(K) = A_inf * (1 - e^{-beta*K})")
+    print("=" * 70)
 
-if __name__ == "__main__":    
->>>>>>> c685adb75fe712a3c3ea87d8e5168d9eccadf23c:experiments/figs_appendix_classical/fig_a1_a2_lqr.py
     results_K = experiment_gap_vs_K()
     results_var = experiment_gap_vs_variance()
     experiment_trajectory_comparison()
     create_summary_figure(results_K, results_var)
-<<<<<<< HEAD:experiments/figs_appendix_classical/fig_a1_a2_lqr_simplified.py
-=======
-     
->>>>>>> c685adb75fe712a3c3ea87d8e5168d9eccadf23c:experiments/figs_appendix_classical/fig_a1_a2_lqr.py
