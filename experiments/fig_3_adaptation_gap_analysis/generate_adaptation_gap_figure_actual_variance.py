@@ -194,8 +194,7 @@ def sample_gamma_tasks(n_tasks, diversity_scale=1.0, rng=None,
     # Use provided center or training distribution center
     if center_deph is not None and center_relax is not None:
         deph_center = center_deph
-        relax_center = center_relax
-        # Use ±15% spread around the center point
+        relax_center = center_relax 
         deph_half = center_deph * 0.15 * diversity_scale
         relax_half = center_relax * 0.15 * diversity_scale
     else:
@@ -233,8 +232,7 @@ def compute_actual_task_variance(task_params_list):
 
 def generate_panel_a_data(robust_policy, n_tasks=20, max_K=30, inner_lr=0.01, device='cpu',
                           center_deph=None, center_relax=None):
-    """Generate panel (a): G_K vs K with exponential fit."""
-    print("Generating Panel (a) data: Adaptation gap vs K...")
+    """Generate panel (a): G_K vs K with exponential fit.""" 
     if center_deph is not None:
         print(f"  Using challenging center: gamma_deph={center_deph}, gamma_relax={center_relax}")
 
@@ -410,7 +408,7 @@ def main():
 
     device = torch.device('cpu')
     print(f"Using device: {device}")
-    print(f"\n*** Using ACTUAL task variance for panel (b) ***\n")
+
 
     # Load pretrained gamma policy
     checkpoint_path = Path(__file__).parent / args.checkpoint
@@ -476,16 +474,6 @@ def main():
     with open(data_path, 'w') as f:
         json.dump(data_to_save, f, indent=2)
     print(f"Data saved to: {data_path}")
-
-    if panel_a_data['c'] is not None:
-        print(f"  c = {panel_a_data['c']:.4f}")
-        print(f"  beta = {panel_a_data['beta']:.4f}")
-        print(f"  R^2 = {panel_a_data['R_squared']:.4f}")
-    print(f"\nPanel (b) - Linear Scaling with ACTUAL variance:")
-    print(f"  Variance range: [{panel_b_data['sigma_squared_values'].min():.6f}, {panel_b_data['sigma_squared_values'].max():.6f}]")
-    print(f"  Slope = {panel_b_data['slope']:.4f}")
-    print(f"  Intercept = {panel_b_data['intercept']:.4f}")
-    print(f"  R^2 = {panel_b_data['R_squared']:.4f}")
 
 
 if __name__ == '__main__':
