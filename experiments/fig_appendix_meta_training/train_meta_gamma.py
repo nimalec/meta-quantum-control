@@ -1,17 +1,5 @@
 """
 Meta-Training Script for Gamma-Parameterized Quantum Control
-
-This script trains a MAML policy using gamma-rate noise parameterization.
-Uses direct Lindblad rates (gamma_deph, gamma_relax) instead of PSD parameters.
-
-Usage:
-    python train_meta_gamma.py --config ../../configs/experiment_config_gamma.yaml
-
-Key differences from train_meta.py:
-- Uses GammaNoiseParameters instead of NoiseParameters
-- Uses GammaTaskDistribution instead of TaskDistribution
-- Uses DifferentiableLindbladSimulator directly with gamma rates
-- Task features: [gamma_deph/0.1, gamma_relax/0.05, sum/0.15]
 """
 
 import torch
@@ -21,7 +9,6 @@ from pathlib import Path
 from datetime import datetime
 import argparse
 
-# Gamma-specific imports
 from metaqctrl.quantum.noise_models_gamma import GammaNoiseParameters, GammaTaskDistribution
 from metaqctrl.quantum.lindblad_torch import DifferentiableLindbladSimulator
 from metaqctrl.quantum.gates import TargetGates
@@ -31,11 +18,9 @@ from metaqctrl.meta_rl.maml import MAML, MAMLTrainer
 
 def create_gamma_lindblad_system(gamma_deph: float, gamma_relax: float, device='cpu'):
     """
-    Create Lindblad simulator with direct gamma rates.
-
     Args:
-        gamma_deph: Pure dephasing rate [1/s]
-        gamma_relax: Relaxation rate [1/s]
+        gamma_deph: Pure dephasing rate 
+        gamma_relax: Relaxation rate  
         device: 'cpu' or 'cuda'
 
     Returns:
@@ -46,7 +31,6 @@ def create_gamma_lindblad_system(gamma_deph: float, gamma_relax: float, device='
     sigma_y = torch.tensor([[0, -1j], [1j, 0]], dtype=torch.complex64, device=device)
     sigma_z = torch.tensor([[1, 0], [0, -1]], dtype=torch.complex64, device=device)
 
-    # Lindblad operators from gamma rates
     L_relax = torch.sqrt(torch.tensor(gamma_relax, dtype=torch.float32, device=device)) * \
               torch.tensor([[0, 1], [0, 0]], dtype=torch.complex64, device=device)
     L_deph = torch.sqrt(torch.tensor(gamma_deph / 2.0, dtype=torch.float32, device=device)) * \
@@ -99,7 +83,6 @@ def gamma_data_generator(
     device: torch.device
 ):
     """Generate data for a gamma task."""
-    # Convert gamma parameters to normalized features
     task_features = torch.tensor(
         task_params.to_array(normalized=True),
         dtype=torch.float32,
@@ -118,8 +101,6 @@ def gamma_data_generator(
 def create_gamma_loss_function(target_state: np.ndarray, device, config: dict):
     """
     Create loss function for gamma-parameterized tasks.
-
-    Loss = 1 - Fidelity(ρ_final, ρ_target)
     """
     target_state_torch = torch.tensor(target_state, dtype=torch.complex64, device=device)
     T = config.get('gate_time', 1.0)
@@ -140,7 +121,6 @@ def create_gamma_loss_function(target_state: np.ndarray, device, config: dict):
         # Generate control sequence
         controls = policy(task_features)
 
-        # Initial state |0><0|
         rho0 = torch.tensor([[1, 0], [0, 0]], dtype=torch.complex64, device=device)
 
         # Evolve quantum state
@@ -158,16 +138,9 @@ def create_gamma_loss_function(target_state: np.ndarray, device, config: dict):
 
 
 def main(config_path: str):
-    """Main training loop for gamma-parameterized MAML."""
-
     # Load config
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
-
-    print("=" * 70)
-    print("Meta-RL for Quantum Control - Gamma Parameterization")
-    print("=" * 70)
-    print(f"Config: {config_path}\n")
 
     # Set random seeds
     seed = config.get('seed', 42)
