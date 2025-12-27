@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""
-Create publication-ready MAML vs GRAPE comparison figure using saved data.
-"""
 
 import json
 import numpy as np
@@ -9,7 +6,6 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 from pathlib import Path
 
-# Publication-quality settings
 rcParams['font.family'] = 'serif'
 rcParams['font.serif'] = ['Times New Roman', 'DejaVu Serif', 'serif']
 rcParams['mathtext.fontset'] = 'dejavuserif'
@@ -59,7 +55,7 @@ def create_figure(data_path: str, output_path: str):
     bars = ax.bar(x, means, yerr=stds, capsize=3, color=colors,
                   alpha=0.85, edgecolor='black', linewidth=0.8)
 
-    # Add hatching to distinguish FOMAML variants
+
     bars[2].set_hatch('...')
     bars[3].set_hatch('///')
     bars[4].set_hatch('xxx')
@@ -72,15 +68,12 @@ def create_figure(data_path: str, output_path: str):
     ax.grid(True, alpha=0.3, axis='y', linewidth=0.5)
     ax.text(-0.12, 1.05, '(a)', transform=ax.transAxes, fontsize=12, fontweight='bold')
 
-    # Value labels - clear and bold, positioned above error bars
     for bar, mean, std in zip(bars, means, stds):
         ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + std + 0.15,
                 f'{mean:.1f}%', ha='center', va='bottom', fontsize=8, fontweight='bold')
 
-    # === Panel (b): Computational cost comparison ===
     ax = axes[1]
 
-    # Bar chart comparing optimization steps
     labels = ['FOMAML ($K$=10)', 'GRAPE (from scratch)']
     steps = [10, grape_steps_97]
     bar_colors = ['#1F77B4', '#D62728']
@@ -96,7 +89,6 @@ def create_figure(data_path: str, output_path: str):
     ax.grid(True, alpha=0.3, axis='y', linewidth=0.5)
     ax.text(-0.12, 1.05, '(b)', transform=ax.transAxes, fontsize=12, fontweight='bold')
 
-    # Value labels inside bars (white text)
     ax.text(bars2[0].get_x() + bars2[0].get_width()/2, steps[0]/2,
             f'{steps[0]}', ha='center', va='center', fontsize=16,
             fontweight='bold', color='white')
@@ -104,7 +96,6 @@ def create_figure(data_path: str, output_path: str):
             f'{steps[1]}', ha='center', va='center', fontsize=16,
             fontweight='bold', color='white')
 
-    # Clear speedup annotation with box - upper left corner
     speedup = steps[1] / steps[0]
     ax.text(0.05, 0.92, f'{speedup:.1f}× faster',
             transform=ax.transAxes, ha='left', va='top', fontsize=14,
@@ -136,8 +127,7 @@ def create_figure_v2(data_path: str, output_path: str):
 
     # Create figure
     fig, axes = plt.subplots(1, 2, figsize=(8, 3.5))
-
-    # === Panel (a): Fidelity comparison ===
+ 
     ax = axes[0]
 
     # Simplified: just compare key methods
@@ -166,10 +156,8 @@ def create_figure_v2(data_path: str, output_path: str):
         ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + std + 0.12,
                 f'{mean:.1f}%', ha='center', va='bottom', fontsize=9, fontweight='bold')
 
-    # === Panel (b): Steps to reach fidelity threshold ===
     ax = axes[1]
 
-    # Find GRAPE steps to reach 97% threshold
     idx_97 = np.where(grape_trajectory >= 97)[0]
     grape_steps_97 = idx_97[0] if len(idx_97) > 0 else 150
 
@@ -197,7 +185,6 @@ def create_figure_v2(data_path: str, output_path: str):
             f'{steps[1]}', ha='center', va='center', fontsize=14,
             fontweight='bold', color='white')
 
-    # Speedup text box - upper left corner
     speedup = steps[1] / steps[0]
     ax.text(0.05, 0.92, f'{speedup:.1f}× faster\nwith FOMAML',
             transform=ax.transAxes, ha='left', va='top',
@@ -205,7 +192,6 @@ def create_figure_v2(data_path: str, output_path: str):
             bbox=dict(boxstyle='round,pad=0.4', facecolor='#E8F4FD',
                      edgecolor='#1F77B4', linewidth=1.5))
 
-    # Add subtitle explaining the comparison
     ax.set_title('Steps to reach ~97% fidelity', fontsize=10, style='italic', pad=10)
 
     plt.tight_layout()
